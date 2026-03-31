@@ -79,6 +79,26 @@ func TestCreateTestRepo_WithRemotes(t *testing.T) {
 	}
 }
 
+func TestCreateTestRepo_WithRemotePathContainingSpaces(t *testing.T) {
+	remotePath := testutil.CreateBareRemote(t, "origin with space")
+
+	repoPath := testutil.CreateTestRepo(t, testutil.RepoOptions{
+		Name: "remote-space-repo",
+		Remotes: map[string]string{
+			"origin": remotePath,
+		},
+	})
+
+	remotes := testutil.GetRemotes(t, repoPath)
+	originURL, exists := remotes["origin"]
+	if !exists {
+		t.Fatal("Expected 'origin' remote to be configured")
+	}
+	if originURL != remotePath {
+		t.Fatalf("Expected origin URL %q, got %q", remotePath, originURL)
+	}
+}
+
 func TestCreateBareRemote(t *testing.T) {
 	remotePath := testutil.CreateBareRemote(t, "test-remote")
 
