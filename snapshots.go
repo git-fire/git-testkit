@@ -43,6 +43,9 @@ func SnapshotRepo(t *testing.T, repoPath string) *Snapshot {
 		if err != nil {
 			return fmt.Errorf("failed to get relative path: %w", err)
 		}
+		if relPath == "." {
+			return nil
+		}
 		header.Name = relPath
 
 		// Write header
@@ -117,7 +120,10 @@ func RestoreSnapshot(t *testing.T, snapshot *Snapshot) string {
 		}
 
 		// Construct full path
-		targetPath := filepath.Join(restorePath, header.Name)
+		targetPath, err := safeJoin(restorePath, header.Name)
+		if err != nil {
+			t.Fatalf("Invalid snapshot path %q: %v", header.Name, err)
+		}
 
 		// Handle different file types
 		switch header.Typeflag {
@@ -152,6 +158,30 @@ func RestoreSnapshot(t *testing.T, snapshot *Snapshot) string {
 	}
 
 	return restorePath
+}
+
+func safeJoin(base, name string) (string, error) {
+	cleanName := filepath.Clean(name)
+	if cleanName == "." || cleanName == string(filepath.Separator) {
+		return "", fmt.Errorf("empty or root path is not allowed")
+	}
+	if filepath.IsAbs(cleanName) {
+		return "", fmt.Errorf("absolute paths are not allowed")
+	}
+	if cleanName == ".." || len(cleanName) >= 3 && cleanName[:3] == ".."+string(filepath.Separator) {
+		return "", fmt.Errorf("path traversal is not allowed")
+	}
+
+	target := filepath.Join(base, cleanName)
+	rel, err := filepath.Rel(base, target)
+	if err != nil {
+		return "", err
+	}
+	if rel == ".." || len(rel) >= 3 && rel[:3] == ".."+string(filepath.Separator) {
+		return "", fmt.Errorf("resolved path escapes restore directory")
+	}
+
+	return target, nil
 }
 
 // SnapshotSize returns the size of the snapshot in bytes

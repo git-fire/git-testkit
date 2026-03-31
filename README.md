@@ -8,6 +8,11 @@
 go get github.com/git-fire/git-testkit
 ```
 
+## Requirements
+
+- `git` must be installed and available on `PATH`
+- Go 1.22+
+
 ## What it includes
 
 - Repository fixtures (`CreateTestRepo`, `CreateBareRemote`, `RunGitCmd`)
@@ -34,3 +39,35 @@ func TestWithRepo(t *testing.T) {
 	}
 }
 ```
+
+## Common patterns
+
+### Build a conflict scenario
+
+```go
+func TestConflictFlow(t *testing.T) {
+	_, local, _ := testutil.CreateConflictScenario(t)
+
+	// Exercise your logic against a real diverged local clone.
+	testutil.RunGitCmd(t, local.Path(), "status")
+}
+```
+
+### Snapshot expensive setup
+
+```go
+func TestUsingSnapshot(t *testing.T) {
+	_, repo := testutil.CreateLargeRepoScenario(t, 20, 10)
+
+	snap := testutil.SnapshotRepo(t, repo.Path())
+	clonePath := testutil.RestoreSnapshot(t, snap)
+
+	// Use clonePath in assertions without rebuilding the fixture each time.
+	testutil.RunGitCmd(t, clonePath, "status")
+}
+```
+
+## Notes
+
+- Snapshots are intended for deterministic test fixtures and only restore regular files/directories.
+- Helpers fail tests immediately (`t.Fatalf`) when git commands fail, so errors surface close to setup code.
