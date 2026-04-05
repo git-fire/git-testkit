@@ -62,6 +62,23 @@ func TestRestoreSnapshotRejectsUnsafeArchivePaths(t *testing.T) {
 	}
 }
 
+func TestSnapshotRepoNormalizesTrailingDotPath(t *testing.T) {
+	_, repo := CreateCleanRepoScenario(t)
+	oldWd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(oldWd) })
+	if err := os.Chdir(repo.path); err != nil {
+		t.Fatal(err)
+	}
+	snap := SnapshotRepo(t, ".")
+	if got, want := snap.Name(), "snapshot"; got != want {
+		t.Fatalf("expected snapshot name %q, got %q", want, got)
+	}
+	_ = RestoreSnapshot(t, snap)
+}
+
 func TestLoadSnapshotFromDiskUsesBaseName(t *testing.T) {
 	_, repo := CreateCleanRepoScenario(t)
 	snapshot := SnapshotRepo(t, repo.path)

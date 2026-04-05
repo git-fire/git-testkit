@@ -200,14 +200,20 @@ func GetRemotes(t *testing.T, repoPath string) map[string]string {
 	}
 
 	for _, line := range strings.Split(lines, "\n") {
+		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
 		}
-		parts := strings.Fields(line)
-		if len(parts) >= 2 {
-			name := parts[0]
-			url := parts[1]
-			remotes[name] = url
+		name, rest, ok := strings.Cut(line, "\t")
+		if !ok {
+			continue
+		}
+		name = strings.TrimSpace(name)
+		rest = strings.TrimSpace(rest)
+		rest = strings.TrimSuffix(rest, " (fetch)")
+		rest = strings.TrimSuffix(rest, " (push)")
+		if name != "" && rest != "" {
+			remotes[name] = rest
 		}
 	}
 

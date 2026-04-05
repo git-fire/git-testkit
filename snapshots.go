@@ -11,6 +11,14 @@ import (
 	"testing"
 )
 
+func normalizeSnapshotName(path string) string {
+	name := filepath.Base(path)
+	if name == "." || name == string(filepath.Separator) {
+		return "snapshot"
+	}
+	return name
+}
+
 // Snapshot represents a saved state of a git repository
 type Snapshot struct {
 	name    string
@@ -82,7 +90,7 @@ func SnapshotRepo(t *testing.T, repoPath string) *Snapshot {
 	}
 
 	return &Snapshot{
-		name:    filepath.Base(repoPath),
+		name:    normalizeSnapshotName(repoPath),
 		tarball: buf.Bytes(),
 	}
 }
@@ -215,13 +223,8 @@ func LoadSnapshotFromDisk(t *testing.T, filePath string) *Snapshot {
 		t.Fatalf("Failed to load snapshot from disk: %v", err)
 	}
 
-	snapshotName := filepath.Base(filePath)
-	if snapshotName == "." || snapshotName == string(filepath.Separator) {
-		snapshotName = "snapshot"
-	}
-
 	return &Snapshot{
-		name:    snapshotName,
+		name:    normalizeSnapshotName(filePath),
 		tarball: data,
 	}
 }

@@ -18,7 +18,12 @@ Requirements:
 Clone and verify:
 
 ```bash
-git clone git@github.com:git-fire/git-testkit.git
+# HTTPS (no SSH keys required)
+git clone https://github.com/git-fire/git-testkit.git
+
+# or SSH
+# git clone git@github.com:git-fire/git-testkit.git
+
 cd git-testkit
 go test ./...
 ```
