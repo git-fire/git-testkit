@@ -8,8 +8,17 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
+
+func normalizeSnapshotName(path string) string {
+	name := filepath.Base(path)
+	if name == "." || name == ".." || name == string(filepath.Separator) {
+		return "snapshot"
+	}
+	return name
+}
 
 // Snapshot represents a saved state of a git repository
 type Snapshot struct {
@@ -42,6 +51,9 @@ func SnapshotRepo(t *testing.T, repoPath string) *Snapshot {
 		relPath, err := filepath.Rel(repoPath, path)
 		if err != nil {
 			return fmt.Errorf("failed to get relative path: %w", err)
+		}
+		if relPath == "." {
+			return nil
 		}
 		header.Name = relPath
 
@@ -79,7 +91,7 @@ func SnapshotRepo(t *testing.T, repoPath string) *Snapshot {
 	}
 
 	return &Snapshot{
-		name:    filepath.Base(repoPath),
+		name:    normalizeSnapshotName(repoPath),
 		tarball: buf.Bytes(),
 	}
 }
@@ -91,7 +103,10 @@ func RestoreSnapshot(t *testing.T, snapshot *Snapshot) string {
 
 	// Create temp directory for restoration
 	tmpDir := t.TempDir()
-	restorePath := filepath.Join(tmpDir, snapshot.name)
+	restorePath, err := safeJoin(tmpDir, snapshot.name)
+	if err != nil {
+		t.Fatalf("Invalid snapshot name %q: %v", snapshot.name, err)
+	}
 
 	if err := os.MkdirAll(restorePath, 0755); err != nil {
 		t.Fatalf("Failed to create restore directory: %v", err)
@@ -117,7 +132,10 @@ func RestoreSnapshot(t *testing.T, snapshot *Snapshot) string {
 		}
 
 		// Construct full path
-		targetPath := filepath.Join(restorePath, header.Name)
+		targetPath, err := safeJoin(restorePath, header.Name)
+		if err != nil {
+			t.Fatalf("Invalid snapshot path %q: %v", header.Name, err)
+		}
 
 		// Handle different file types
 		switch header.Typeflag {
@@ -154,6 +172,30 @@ func RestoreSnapshot(t *testing.T, snapshot *Snapshot) string {
 	return restorePath
 }
 
+func safeJoin(base, name string) (string, error) {
+	cleanName := filepath.Clean(name)
+	if cleanName == "." || cleanName == string(filepath.Separator) {
+		return "", fmt.Errorf("empty or root path is not allowed")
+	}
+	if filepath.IsAbs(cleanName) {
+		return "", fmt.Errorf("absolute paths are not allowed")
+	}
+	if cleanName == ".." || strings.HasPrefix(cleanName, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("path traversal is not allowed")
+	}
+
+	target := filepath.Join(base, cleanName)
+	rel, err := filepath.Rel(base, target)
+	if err != nil {
+		return "", err
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("resolved path escapes restore directory")
+	}
+
+	return target, nil
+}
+
 // SnapshotSize returns the size of the snapshot in bytes
 func (s *Snapshot) Size() int {
 	return len(s.tarball)
@@ -174,16 +216,16 @@ func SaveSnapshotToDisk(t *testing.T, snapshot *Snapshot, filepath string) {
 }
 
 // LoadSnapshotFromDisk loads a snapshot from a file
-func LoadSnapshotFromDisk(t *testing.T, filepath string) *Snapshot {
+func LoadSnapshotFromDisk(t *testing.T, filePath string) *Snapshot {
 	t.Helper()
 
-	data, err := os.ReadFile(filepath)
+	data, err := os.ReadFile(filePath)
 	if err != nil {
 		t.Fatalf("Failed to load snapshot from disk: %v", err)
 	}
 
 	return &Snapshot{
-		name:    filepath,
+		name:    normalizeSnapshotName(filePath),
 		tarball: data,
 	}
 }

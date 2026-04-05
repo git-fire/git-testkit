@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -193,69 +194,39 @@ func GetRemotes(t *testing.T, repoPath string) map[string]string {
 	//         "origin	/path/to/remote (push)"
 	remotes := make(map[string]string)
 
-	lines := string(output)
+	lines := strings.TrimSpace(string(output))
 	if lines == "" {
 		return remotes
 	}
 
-	// Simple parsing - just extract remote names
-	// Full parsing not needed for tests
-	for _, line := range splitLines(lines) {
+	for _, line := range strings.Split(lines, "\n") {
+		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
 		}
-		// Just check if "origin" appears in the line
-		// Good enough for test validation
-		if len(line) > 0 {
-			// Extract first word (remote name)
-			parts := splitWhitespace(line)
-			if len(parts) >= 2 {
-				name := parts[0]
-				url := parts[1]
-				remotes[name] = url
+		name, remainder, ok := strings.Cut(line, "\t")
+		if !ok {
+			// Fallback for unusual formatting that does not use tabs.
+			idx := strings.IndexAny(line, " \t")
+			if idx == -1 {
+				continue
 			}
+			name = strings.TrimSpace(line[:idx])
+			remainder = strings.TrimSpace(line[idx+1:])
+		} else {
+			name = strings.TrimSpace(name)
+			remainder = strings.TrimSpace(remainder)
+		}
+
+		remainder = strings.TrimSuffix(remainder, " (fetch)")
+		remainder = strings.TrimSuffix(remainder, " (push)")
+
+		if name != "" && remainder != "" {
+			remotes[name] = remainder
 		}
 	}
 
 	return remotes
-}
-
-// Helper: split by newlines
-func splitLines(s string) []string {
-	var lines []string
-	current := ""
-	for _, ch := range s {
-		if ch == '\n' {
-			lines = append(lines, current)
-			current = ""
-		} else {
-			current += string(ch)
-		}
-	}
-	if current != "" {
-		lines = append(lines, current)
-	}
-	return lines
-}
-
-// Helper: split by whitespace/tabs
-func splitWhitespace(s string) []string {
-	var parts []string
-	current := ""
-	for _, ch := range s {
-		if ch == ' ' || ch == '\t' {
-			if current != "" {
-				parts = append(parts, current)
-				current = ""
-			}
-		} else {
-			current += string(ch)
-		}
-	}
-	if current != "" {
-		parts = append(parts, current)
-	}
-	return parts
 }
 
 // RunGitCmd runs a git command and fails the test if it errors
@@ -277,13 +248,7 @@ func GetCurrentSHA(t *testing.T, repoPath string) string {
 		t.Fatalf("Failed to get current SHA: %v", err)
 	}
 
-	sha := string(output)
-	// Trim newline
-	if len(sha) > 0 && sha[len(sha)-1] == '\n' {
-		sha = sha[:len(sha)-1]
-	}
-
-	return sha
+	return strings.TrimSpace(string(output))
 }
 
 // GetBranches returns all branches in the repo
@@ -298,7 +263,7 @@ func GetBranches(t *testing.T, repoPath string) []string {
 		t.Fatalf("Failed to get branches: %v", err)
 	}
 
-	branches := splitLines(string(output))
+	branches := strings.Split(strings.TrimSpace(string(output)), "\n")
 
 	// Filter out empty lines
 	var result []string
