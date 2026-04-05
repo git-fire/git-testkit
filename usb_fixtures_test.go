@@ -10,9 +10,9 @@ import (
 
 func TestMustUSBVolumeRoot(t *testing.T) {
 	root := MustUSBVolumeRoot(t, USBVolumeOptions{
-		LayoutDir:       "repos",
-		Strategy:        "git-mirror",
-		CreateReposDir:  true,
+		LayoutDir:      "repos",
+		Strategy:       "git-mirror",
+		CreateReposDir: true,
 	})
 	if _, err := os.Stat(filepath.Join(root, ".git-fire")); err != nil {
 		t.Fatalf("expected .git-fire marker: %v", err)
@@ -94,24 +94,24 @@ func TestReadUSBVolumeConfigBytes_errors(t *testing.T) {
 		name, content, wantSubstring string
 	}{
 		{
-			name:           "invalid_schema_version",
-			content:        "schema_version = notint\n",
-			wantSubstring:  "schema_version",
+			name:          "invalid_schema_version",
+			content:       "schema_version = notint\n",
+			wantSubstring: "schema_version",
 		},
 		{
-			name:           "layout_dir_escape",
-			content:        "layout_dir = ../x\n",
-			wantSubstring:  "layout_dir",
+			name:          "layout_dir_escape",
+			content:       "layout_dir = ../x\n",
+			wantSubstring: "layout_dir",
 		},
 		{
-			name:           "invalid_created_at",
-			content:        "created_at = not-a-date\n",
-			wantSubstring:  "created_at",
+			name:          "invalid_created_at",
+			content:       "created_at = not-a-date\n",
+			wantSubstring: "created_at",
 		},
 		{
-			name:           "empty_created_at",
-			content:        "created_at = \n",
-			wantSubstring:  "created_at",
+			name:          "empty_created_at",
+			content:       "created_at = \n",
+			wantSubstring: "created_at",
 		},
 	}
 	for _, tc := range cases {
@@ -144,4 +144,22 @@ func TestFileURLForPath(t *testing.T) {
 	if !strings.HasPrefix(got, "file:///") {
 		t.Fatalf("expected canonical file URL with empty authority (file:///...), got %q", got)
 	}
+}
+
+func TestAssertGitDirAt(t *testing.T) {
+	t.Run("bare_repo", func(t *testing.T) {
+		repo := t.TempDir()
+		if err := os.WriteFile(filepath.Join(repo, "HEAD"), []byte("ref: refs/heads/main\n"), 0o644); err != nil {
+			t.Fatalf("write HEAD: %v", err)
+		}
+		AssertGitDirAt(t, repo, true)
+	})
+
+	t.Run("non_bare_repo", func(t *testing.T) {
+		repo := t.TempDir()
+		if err := os.Mkdir(filepath.Join(repo, ".git"), 0o755); err != nil {
+			t.Fatalf("create .git directory: %v", err)
+		}
+		AssertGitDirAt(t, repo, false)
+	})
 }
