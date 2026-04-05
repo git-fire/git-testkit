@@ -216,8 +216,14 @@ func GetRemotes(t *testing.T, repoPath string) map[string]string {
 			remainder = strings.TrimSpace(line[idx+1:])
 		}
 
-		remainder = strings.TrimSuffix(remainder, " (fetch)")
-		remainder = strings.TrimSuffix(remainder, " (push)")
+		if strings.HasSuffix(remainder, ")") {
+			if idx := strings.LastIndex(remainder, " ("); idx != -1 {
+				suffix := remainder[idx+2 : len(remainder)-1]
+				if suffix == "fetch" || suffix == "push" {
+					remainder = remainder[:idx]
+				}
+			}
+		}
 
 		if name != "" && remainder != "" {
 			remotes[name] = remainder

@@ -99,6 +99,31 @@ func TestCreateTestRepo_WithRemotePathContainingSpaces(t *testing.T) {
 	}
 }
 
+func TestCreateTestRepo_WithRemotePathContainingPushSuffix(t *testing.T) {
+	tmpDir := t.TempDir()
+	remotePath := filepath.Join(tmpDir, "origin (push)")
+	if err := os.MkdirAll(remotePath, 0755); err != nil {
+		t.Fatalf("Failed to create bare repo directory: %v", err)
+	}
+	testutil.RunGitCmd(t, tmpDir, "init", "--bare", remotePath)
+
+	repoPath := testutil.CreateTestRepo(t, testutil.RepoOptions{
+		Name: "remote-push-suffix-repo",
+		Remotes: map[string]string{
+			"origin": remotePath,
+		},
+	})
+
+	remotes := testutil.GetRemotes(t, repoPath)
+	originURL, exists := remotes["origin"]
+	if !exists {
+		t.Fatal("Expected 'origin' remote to be configured")
+	}
+	if originURL != remotePath {
+		t.Fatalf("Expected origin URL %q, got %q", remotePath, originURL)
+	}
+}
+
 func TestCreateBareRemote(t *testing.T) {
 	remotePath := testutil.CreateBareRemote(t, "test-remote")
 

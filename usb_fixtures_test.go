@@ -46,3 +46,14 @@ func TestFileURLForPath(t *testing.T) {
 		t.Fatalf("expected file:// URL, got %s", got)
 	}
 }
+
+func TestAssertGitDirAt(t *testing.T) {
+	nonBare := t.TempDir()
+	runGit(t, nonBare, "init")
+	AssertGitDirAt(t, nonBare, false)
+
+	parent := t.TempDir()
+	bare := filepath.Join(parent, "remote.git")
+	runGit(t, parent, "init", "--bare", bare)
+	AssertGitDirAt(t, bare, true)
+}
