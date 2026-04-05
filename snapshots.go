@@ -8,8 +8,17 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
+
+func normalizeSnapshotName(path string) string {
+	name := filepath.Base(path)
+	if name == "." || name == ".." || name == string(filepath.Separator) {
+		return "snapshot"
+	}
+	return name
+}
 
 // Snapshot represents a saved state of a git repository
 type Snapshot struct {
@@ -82,7 +91,7 @@ func SnapshotRepo(t *testing.T, repoPath string) *Snapshot {
 	}
 
 	return &Snapshot{
-		name:    filepath.Base(repoPath),
+		name:    normalizeSnapshotName(repoPath),
 		tarball: buf.Bytes(),
 	}
 }
@@ -94,7 +103,10 @@ func RestoreSnapshot(t *testing.T, snapshot *Snapshot) string {
 
 	// Create temp directory for restoration
 	tmpDir := t.TempDir()
-	restorePath := filepath.Join(tmpDir, snapshot.name)
+	restorePath, err := safeJoin(tmpDir, snapshot.name)
+	if err != nil {
+		t.Fatalf("Invalid snapshot name %q: %v", snapshot.name, err)
+	}
 
 	if err := os.MkdirAll(restorePath, 0755); err != nil {
 		t.Fatalf("Failed to create restore directory: %v", err)
@@ -168,7 +180,7 @@ func safeJoin(base, name string) (string, error) {
 	if filepath.IsAbs(cleanName) {
 		return "", fmt.Errorf("absolute paths are not allowed")
 	}
-	if cleanName == ".." || len(cleanName) >= 3 && cleanName[:3] == ".."+string(filepath.Separator) {
+	if cleanName == ".." || strings.HasPrefix(cleanName, ".."+string(filepath.Separator)) {
 		return "", fmt.Errorf("path traversal is not allowed")
 	}
 
@@ -177,7 +189,7 @@ func safeJoin(base, name string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if rel == ".." || len(rel) >= 3 && rel[:3] == ".."+string(filepath.Separator) {
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return "", fmt.Errorf("resolved path escapes restore directory")
 	}
 
@@ -204,16 +216,16 @@ func SaveSnapshotToDisk(t *testing.T, snapshot *Snapshot, filepath string) {
 }
 
 // LoadSnapshotFromDisk loads a snapshot from a file
-func LoadSnapshotFromDisk(t *testing.T, filepath string) *Snapshot {
+func LoadSnapshotFromDisk(t *testing.T, filePath string) *Snapshot {
 	t.Helper()
 
-	data, err := os.ReadFile(filepath)
+	data, err := os.ReadFile(filePath)
 	if err != nil {
 		t.Fatalf("Failed to load snapshot from disk: %v", err)
 	}
 
 	return &Snapshot{
-		name:    filepath,
+		name:    normalizeSnapshotName(filePath),
 		tarball: data,
 	}
 }

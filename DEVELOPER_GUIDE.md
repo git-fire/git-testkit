@@ -18,7 +18,12 @@ Requirements:
 Clone and verify:
 
 ```bash
+# HTTPS (no SSH keys required)
+git clone https://github.com/git-fire/git-testkit.git
+
+# or SSH
 git clone git@github.com:git-fire/git-testkit.git
+
 cd git-testkit
 go test ./...
 ```
@@ -29,6 +34,7 @@ go test ./...
 - `scenarios.go`: fluent scenario builder and predefined multi-repo scenarios.
 - `snapshots.go`: snapshot/restore utilities for expensive test setup reuse.
 - `fixtures_test.go`: external package tests (`testutil_test`) that validate public API usage.
+- `usb_fixtures.go` / `usb_fixtures_test.go`: USB volume root and `.git-fire` config helpers for backup-mode style tests.
 - `scenarios_test.go`: package-internal tests for scenario/snapshot behavior.
 
 ## Design principles

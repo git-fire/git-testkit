@@ -11,6 +11,22 @@ import (
 	"time"
 )
 
+// validateFixtureLayoutDir reports whether layoutDir may be joined under a fixture root.
+// Empty layoutDir is allowed (caller may default it).
+func validateFixtureLayoutDir(layoutDir string) error {
+	if layoutDir == "" {
+		return nil
+	}
+	clean := filepath.Clean(layoutDir)
+	if filepath.IsAbs(clean) {
+		return fmt.Errorf("must be relative to fixture root: %q", layoutDir)
+	}
+	if clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+		return fmt.Errorf("must be relative to fixture root: %q", layoutDir)
+	}
+	return nil
+}
+
 type USBVolumeOptions struct {
 	LayoutDir      string
 	Strategy       string
@@ -24,17 +40,25 @@ type USBVolumeConfig struct {
 	CreatedAt     time.Time
 }
 
+func mustRelativeLayoutDir(t *testing.T, layoutDir string) string {
+	t.Helper()
+	if layoutDir == "" {
+		return "repos"
+	}
+	if err := validateFixtureLayoutDir(layoutDir); err != nil {
+		t.Fatalf("layout_dir %v", err)
+	}
+	return filepath.Clean(layoutDir)
+}
+
 func MustUSBVolumeRoot(t *testing.T, opts USBVolumeOptions) string {
 	t.Helper()
 	root := t.TempDir()
 	cfg := USBVolumeConfig{
 		SchemaVersion: 1,
-		LayoutDir:     opts.LayoutDir,
+		LayoutDir:     mustRelativeLayoutDir(t, opts.LayoutDir),
 		Strategy:      opts.Strategy,
 		CreatedAt:     time.Now().UTC(),
-	}
-	if cfg.LayoutDir == "" {
-		cfg.LayoutDir = "repos"
 	}
 	if cfg.Strategy == "" {
 		cfg.Strategy = "git-mirror"
@@ -53,9 +77,7 @@ func WriteUSBVolumeConfig(t *testing.T, root string, cfg USBVolumeConfig) {
 	if cfg.SchemaVersion <= 0 {
 		cfg.SchemaVersion = 1
 	}
-	if cfg.LayoutDir == "" {
-		cfg.LayoutDir = "repos"
-	}
+	cfg.LayoutDir = mustRelativeLayoutDir(t, cfg.LayoutDir)
 	if cfg.Strategy == "" {
 		cfg.Strategy = "git-mirror"
 	}
@@ -74,12 +96,7 @@ func WriteUSBVolumeConfig(t *testing.T, root string, cfg USBVolumeConfig) {
 	}
 }
 
-func ReadUSBVolumeConfig(t *testing.T, root string) USBVolumeConfig {
-	t.Helper()
-	data, err := os.ReadFile(filepath.Join(root, ".git-fire"))
-	if err != nil {
-		t.Fatalf("failed reading .git-fire: %v", err)
-	}
+func readUSBVolumeConfigBytes(data []byte) (USBVolumeConfig, error) {
 	cfg := USBVolumeConfig{}
 	lines := strings.Split(string(data), "\n")
 	for _, line := range lines {
@@ -93,24 +110,56 @@ func ReadUSBVolumeConfig(t *testing.T, root string) USBVolumeConfig {
 		}
 		key = strings.TrimSpace(key)
 		val = strings.TrimSpace(val)
-		if unquoted, err := strconv.Unquote(val); err == nil {
-			val = unquoted
-		} else {
-			val = strings.Trim(val, "\"")
-		}
 		switch key {
 		case "schema_version":
-			n, _ := strconv.Atoi(val)
+			n, err := strconv.Atoi(val)
+			if err != nil {
+				return cfg, fmt.Errorf("invalid schema_version %q: %w", val, err)
+			}
 			cfg.SchemaVersion = n
 		case "layout_dir":
-			cfg.LayoutDir = val
+			if unquoted, err := strconv.Unquote(val); err == nil {
+				val = unquoted
+			}
+			if err := validateFixtureLayoutDir(val); err != nil {
+				return cfg, fmt.Errorf("layout_dir: %w", err)
+			}
+			if val == "" {
+				cfg.LayoutDir = ""
+			} else {
+				cfg.LayoutDir = filepath.Clean(val)
+			}
 		case "strategy":
+			if unquoted, err := strconv.Unquote(val); err == nil {
+				val = unquoted
+			}
 			cfg.Strategy = val
 		case "created_at":
-			if ts, err := time.Parse(time.RFC3339, val); err == nil {
-				cfg.CreatedAt = ts
+			if unquoted, err := strconv.Unquote(val); err == nil {
+				val = unquoted
 			}
+			if val == "" {
+				return cfg, fmt.Errorf("created_at: empty value")
+			}
+			ts, err := time.Parse(time.RFC3339, val)
+			if err != nil {
+				return cfg, fmt.Errorf("invalid created_at %q: %w", val, err)
+			}
+			cfg.CreatedAt = ts
 		}
+	}
+	return cfg, nil
+}
+
+func ReadUSBVolumeConfig(t *testing.T, root string) USBVolumeConfig {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(root, ".git-fire"))
+	if err != nil {
+		t.Fatalf("failed reading .git-fire: %v", err)
+	}
+	cfg, err := readUSBVolumeConfigBytes(data)
+	if err != nil {
+		t.Fatalf("parse .git-fire: %v", err)
 	}
 	return cfg
 }
@@ -118,13 +167,23 @@ func ReadUSBVolumeConfig(t *testing.T, root string) USBVolumeConfig {
 func AssertGitDirAt(t *testing.T, path string, wantBare bool) {
 	t.Helper()
 	if wantBare {
-		if _, err := os.Stat(filepath.Join(path, "HEAD")); err != nil {
+		headPath := filepath.Join(path, "HEAD")
+		info, err := os.Stat(headPath)
+		if err != nil {
 			t.Fatalf("expected bare repo at %s: %v", path, err)
+		}
+		if info.IsDir() {
+			t.Fatalf("expected bare repo HEAD file at %s", path)
 		}
 		return
 	}
-	if _, err := os.Stat(filepath.Join(path, ".git")); err != nil {
+	gitPath := filepath.Join(path, ".git")
+	info, err := os.Stat(gitPath)
+	if err != nil {
 		t.Fatalf("expected non-bare repo at %s: %v", path, err)
+	}
+	if !info.IsDir() {
+		t.Fatalf("expected non-bare repo .git directory at %s", path)
 	}
 }
 
@@ -134,10 +193,10 @@ func FileURLForPath(t *testing.T, path string) string {
 	if err != nil {
 		t.Fatalf("failed to make abs path: %v", err)
 	}
-	filePath := filepath.ToSlash(abs)
-	if !strings.HasPrefix(filePath, "/") {
-		filePath = "/" + filePath
+	uPath := filepath.ToSlash(abs)
+	if filepath.VolumeName(abs) != "" && !strings.HasPrefix(uPath, "/") {
+		uPath = "/" + uPath
 	}
-	u := &url.URL{Scheme: "file", Path: filePath}
+	u := &url.URL{Scheme: "file", Path: uPath}
 	return u.String()
 }

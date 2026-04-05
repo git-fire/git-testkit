@@ -204,7 +204,6 @@ func GetRemotes(t *testing.T, repoPath string) map[string]string {
 		if line == "" {
 			continue
 		}
-
 		name, remainder, ok := strings.Cut(line, "\t")
 		if !ok {
 			// Fallback for unusual formatting that does not use tabs.
@@ -212,17 +211,19 @@ func GetRemotes(t *testing.T, repoPath string) map[string]string {
 			if idx == -1 {
 				continue
 			}
-			name = line[:idx]
+			name = strings.TrimSpace(line[:idx])
 			remainder = strings.TrimSpace(line[idx+1:])
+		} else {
+			name = strings.TrimSpace(name)
+			remainder = strings.TrimSpace(remainder)
 		}
 
-		if strings.HasSuffix(remainder, ")") {
-			if idx := strings.LastIndex(remainder, " ("); idx != -1 {
-				suffix := remainder[idx+2 : len(remainder)-1]
-				if suffix == "fetch" || suffix == "push" {
-					remainder = remainder[:idx]
-				}
-			}
+		// Strip only the trailing git remote role suffix once so paths that end
+		// with text like " (push)" are not damaged by sequential TrimSuffix calls.
+		if strings.HasSuffix(remainder, " (fetch)") {
+			remainder = strings.TrimSuffix(remainder, " (fetch)")
+		} else if strings.HasSuffix(remainder, " (push)") {
+			remainder = strings.TrimSuffix(remainder, " (push)")
 		}
 
 		if name != "" && remainder != "" {
