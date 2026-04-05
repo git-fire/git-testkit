@@ -204,7 +204,6 @@ func GetRemotes(t *testing.T, repoPath string) map[string]string {
 		if line == "" {
 			continue
 		}
-
 		name, remainder, ok := strings.Cut(line, "\t")
 		if !ok {
 			// Fallback for unusual formatting that does not use tabs.
@@ -212,8 +211,11 @@ func GetRemotes(t *testing.T, repoPath string) map[string]string {
 			if idx == -1 {
 				continue
 			}
-			name = line[:idx]
+			name = strings.TrimSpace(line[:idx])
 			remainder = strings.TrimSpace(line[idx+1:])
+		} else {
+			name = strings.TrimSpace(name)
+			remainder = strings.TrimSpace(remainder)
 		}
 
 		remainder = strings.TrimSuffix(remainder, " (fetch)")
