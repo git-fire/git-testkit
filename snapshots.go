@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -179,7 +180,7 @@ func safeJoin(base, name string) (string, error) {
 	if filepath.IsAbs(cleanName) {
 		return "", fmt.Errorf("absolute paths are not allowed")
 	}
-	if cleanName == ".." || len(cleanName) >= 3 && cleanName[:3] == ".."+string(filepath.Separator) {
+	if cleanName == ".." || strings.HasPrefix(cleanName, ".."+string(filepath.Separator)) {
 		return "", fmt.Errorf("path traversal is not allowed")
 	}
 
@@ -188,7 +189,7 @@ func safeJoin(base, name string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if rel == ".." || len(rel) >= 3 && rel[:3] == ".."+string(filepath.Separator) {
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return "", fmt.Errorf("resolved path escapes restore directory")
 	}
 

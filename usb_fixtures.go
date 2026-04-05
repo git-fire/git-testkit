@@ -28,8 +28,8 @@ func validateFixtureLayoutDir(layoutDir string) error {
 }
 
 type USBVolumeOptions struct {
-	LayoutDir string
-	Strategy  string
+	LayoutDir      string
+	Strategy       string
 	CreateReposDir bool
 }
 
@@ -109,7 +109,7 @@ func readUSBVolumeConfigBytes(data []byte) (USBVolumeConfig, error) {
 			continue
 		}
 		key = strings.TrimSpace(key)
-		val = strings.Trim(strings.TrimSpace(val), "\"")
+		val = strings.TrimSpace(val)
 		switch key {
 		case "schema_version":
 			n, err := strconv.Atoi(val)
@@ -118,6 +118,9 @@ func readUSBVolumeConfigBytes(data []byte) (USBVolumeConfig, error) {
 			}
 			cfg.SchemaVersion = n
 		case "layout_dir":
+			if unquoted, err := strconv.Unquote(val); err == nil {
+				val = unquoted
+			}
 			if err := validateFixtureLayoutDir(val); err != nil {
 				return cfg, fmt.Errorf("layout_dir: %w", err)
 			}
@@ -127,8 +130,14 @@ func readUSBVolumeConfigBytes(data []byte) (USBVolumeConfig, error) {
 				cfg.LayoutDir = filepath.Clean(val)
 			}
 		case "strategy":
+			if unquoted, err := strconv.Unquote(val); err == nil {
+				val = unquoted
+			}
 			cfg.Strategy = val
 		case "created_at":
+			if unquoted, err := strconv.Unquote(val); err == nil {
+				val = unquoted
+			}
 			if val == "" {
 				return cfg, fmt.Errorf("created_at: empty value")
 			}

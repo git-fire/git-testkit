@@ -41,6 +41,23 @@ func TestReadWriteUSBVolumeConfig(t *testing.T) {
 	}
 }
 
+func TestReadWriteUSBVolumeConfig_preservesEscapedChars(t *testing.T) {
+	root := t.TempDir()
+	WriteUSBVolumeConfig(t, root, USBVolumeConfig{
+		SchemaVersion: 1,
+		LayoutDir:     `repo\"dir\path`,
+		Strategy:      `mirror\"strategy\mode`,
+	})
+
+	cfg := ReadUSBVolumeConfig(t, root)
+	if cfg.LayoutDir != `repo\"dir\path` {
+		t.Fatalf("layout mismatch: got %q", cfg.LayoutDir)
+	}
+	if cfg.Strategy != `mirror\"strategy\mode` {
+		t.Fatalf("strategy mismatch: got %q", cfg.Strategy)
+	}
+}
+
 func TestValidateFixtureLayoutDir(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
