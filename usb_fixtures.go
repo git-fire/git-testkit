@@ -167,13 +167,23 @@ func ReadUSBVolumeConfig(t *testing.T, root string) USBVolumeConfig {
 func AssertGitDirAt(t *testing.T, path string, wantBare bool) {
 	t.Helper()
 	if wantBare {
-		if _, err := os.Stat(filepath.Join(path, "HEAD")); err != nil {
+		headPath := filepath.Join(path, "HEAD")
+		info, err := os.Stat(headPath)
+		if err != nil {
 			t.Fatalf("expected bare repo at %s: %v", path, err)
+		}
+		if info.IsDir() {
+			t.Fatalf("expected bare repo HEAD file at %s", path)
 		}
 		return
 	}
-	if _, err := os.Stat(filepath.Join(path, ".git")); err != nil {
+	gitPath := filepath.Join(path, ".git")
+	info, err := os.Stat(gitPath)
+	if err != nil {
 		t.Fatalf("expected non-bare repo at %s: %v", path, err)
+	}
+	if !info.IsDir() {
+		t.Fatalf("expected non-bare repo .git directory at %s", path)
 	}
 }
 

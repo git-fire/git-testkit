@@ -218,8 +218,13 @@ func GetRemotes(t *testing.T, repoPath string) map[string]string {
 			remainder = strings.TrimSpace(remainder)
 		}
 
-		remainder = strings.TrimSuffix(remainder, " (fetch)")
-		remainder = strings.TrimSuffix(remainder, " (push)")
+		// Strip only the trailing git remote role suffix once so paths that end
+		// with text like " (push)" are not damaged by sequential TrimSuffix calls.
+		if strings.HasSuffix(remainder, " (fetch)") {
+			remainder = strings.TrimSuffix(remainder, " (fetch)")
+		} else if strings.HasSuffix(remainder, " (push)") {
+			remainder = strings.TrimSuffix(remainder, " (push)")
+		}
 
 		if name != "" && remainder != "" {
 			remotes[name] = remainder
