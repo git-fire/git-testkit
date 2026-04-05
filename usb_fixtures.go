@@ -129,6 +129,10 @@ func FileURLForPath(t *testing.T, path string) string {
 	if err != nil {
 		t.Fatalf("failed to make abs path: %v", err)
 	}
-	u := &url.URL{Scheme: "file", Path: filepath.ToSlash(abs)}
+	filePath := filepath.ToSlash(abs)
+	if !strings.HasPrefix(filePath, "/") {
+		filePath = "/" + filePath
+	}
+	u := &url.URL{Scheme: "file", Path: filePath}
 	return u.String()
 }
