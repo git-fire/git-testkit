@@ -94,7 +94,10 @@ func RestoreSnapshot(t *testing.T, snapshot *Snapshot) string {
 
 	// Create temp directory for restoration
 	tmpDir := t.TempDir()
-	restorePath := filepath.Join(tmpDir, snapshot.name)
+	restorePath, err := safeJoin(tmpDir, snapshot.name)
+	if err != nil {
+		t.Fatalf("Invalid snapshot name %q: %v", snapshot.name, err)
+	}
 
 	if err := os.MkdirAll(restorePath, 0755); err != nil {
 		t.Fatalf("Failed to create restore directory: %v", err)
@@ -204,16 +207,21 @@ func SaveSnapshotToDisk(t *testing.T, snapshot *Snapshot, filepath string) {
 }
 
 // LoadSnapshotFromDisk loads a snapshot from a file
-func LoadSnapshotFromDisk(t *testing.T, filepath string) *Snapshot {
+func LoadSnapshotFromDisk(t *testing.T, filePath string) *Snapshot {
 	t.Helper()
 
-	data, err := os.ReadFile(filepath)
+	data, err := os.ReadFile(filePath)
 	if err != nil {
 		t.Fatalf("Failed to load snapshot from disk: %v", err)
 	}
 
+	snapshotName := filepath.Base(filePath)
+	if snapshotName == "." || snapshotName == string(filepath.Separator) {
+		snapshotName = "snapshot"
+	}
+
 	return &Snapshot{
-		name:    filepath,
+		name:    snapshotName,
 		tarball: data,
 	}
 }
