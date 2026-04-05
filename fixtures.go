@@ -204,16 +204,25 @@ func GetRemotes(t *testing.T, repoPath string) map[string]string {
 		if line == "" {
 			continue
 		}
-		name, rest, ok := strings.Cut(line, "\t")
+		name, remainder, ok := strings.Cut(line, "\t")
 		if !ok {
-			continue
+			// Fallback for unusual formatting that does not use tabs.
+			idx := strings.IndexAny(line, " \t")
+			if idx == -1 {
+				continue
+			}
+			name = strings.TrimSpace(line[:idx])
+			remainder = strings.TrimSpace(line[idx+1:])
+		} else {
+			name = strings.TrimSpace(name)
+			remainder = strings.TrimSpace(remainder)
 		}
-		name = strings.TrimSpace(name)
-		rest = strings.TrimSpace(rest)
-		rest = strings.TrimSuffix(rest, " (fetch)")
-		rest = strings.TrimSuffix(rest, " (push)")
-		if name != "" && rest != "" {
-			remotes[name] = rest
+
+		remainder = strings.TrimSuffix(remainder, " (fetch)")
+		remainder = strings.TrimSuffix(remainder, " (push)")
+
+		if name != "" && remainder != "" {
+			remotes[name] = remainder
 		}
 	}
 
