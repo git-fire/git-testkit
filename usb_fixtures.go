@@ -12,8 +12,8 @@ import (
 )
 
 type USBVolumeOptions struct {
-	LayoutDir string
-	Strategy  string
+	LayoutDir      string
+	Strategy       string
 	CreateReposDir bool
 }
 
@@ -92,7 +92,12 @@ func ReadUSBVolumeConfig(t *testing.T, root string) USBVolumeConfig {
 			continue
 		}
 		key = strings.TrimSpace(key)
-		val = strings.Trim(strings.TrimSpace(val), "\"")
+		val = strings.TrimSpace(val)
+		if unquoted, err := strconv.Unquote(val); err == nil {
+			val = unquoted
+		} else {
+			val = strings.Trim(val, "\"")
+		}
 		switch key {
 		case "schema_version":
 			n, _ := strconv.Atoi(val)

@@ -8,9 +8,9 @@ import (
 
 func TestMustUSBVolumeRoot(t *testing.T) {
 	root := MustUSBVolumeRoot(t, USBVolumeOptions{
-		LayoutDir:       "repos",
-		Strategy:        "git-mirror",
-		CreateReposDir:  true,
+		LayoutDir:      "repos",
+		Strategy:       "git-mirror",
+		CreateReposDir: true,
 	})
 	if _, err := os.Stat(filepath.Join(root, ".git-fire")); err != nil {
 		t.Fatalf("expected .git-fire marker: %v", err)
@@ -36,6 +36,23 @@ func TestReadWriteUSBVolumeConfig(t *testing.T) {
 	}
 	if cfg.Strategy != "git-clone" {
 		t.Fatalf("strategy mismatch: %s", cfg.Strategy)
+	}
+}
+
+func TestReadWriteUSBVolumeConfigEscapedValues(t *testing.T) {
+	root := t.TempDir()
+	WriteUSBVolumeConfig(t, root, USBVolumeConfig{
+		SchemaVersion: 3,
+		LayoutDir:     `repos\windows\"quoted"`,
+		Strategy:      `git\mirror`,
+	})
+
+	cfg := ReadUSBVolumeConfig(t, root)
+	if cfg.LayoutDir != `repos\windows\"quoted"` {
+		t.Fatalf("layout mismatch: %q", cfg.LayoutDir)
+	}
+	if cfg.Strategy != `git\mirror` {
+		t.Fatalf("strategy mismatch: %q", cfg.Strategy)
 	}
 }
 
