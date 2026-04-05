@@ -1,8 +1,10 @@
 package testutil
 
 import (
+	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -42,7 +44,17 @@ func TestReadWriteUSBVolumeConfig(t *testing.T) {
 func TestFileURLForPath(t *testing.T) {
 	root := t.TempDir()
 	got := FileURLForPath(t, root)
-	if len(got) < 7 || got[:7] != "file://" {
-		t.Fatalf("expected file:// URL, got %s", got)
+	parsed, err := url.Parse(got)
+	if err != nil {
+		t.Fatalf("parse URL: %v", err)
+	}
+	if parsed.Scheme != "file" {
+		t.Fatalf("scheme %q, want file", parsed.Scheme)
+	}
+	if parsed.Path == "" || parsed.Path[0] != '/' {
+		t.Fatalf("expected absolute path in URL, got path=%q for %q", parsed.Path, got)
+	}
+	if !strings.HasPrefix(got, "file:///") {
+		t.Fatalf("expected canonical file URL with empty authority (file:///...), got %q", got)
 	}
 }

@@ -24,17 +24,29 @@ type USBVolumeConfig struct {
 	CreatedAt     time.Time
 }
 
+func mustRelativeLayoutDir(t *testing.T, layoutDir string) string {
+	t.Helper()
+	if layoutDir == "" {
+		return "repos"
+	}
+	clean := filepath.Clean(layoutDir)
+	if filepath.IsAbs(clean) {
+		t.Fatalf("layout_dir must be relative to fixture root: %q", layoutDir)
+	}
+	if clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+		t.Fatalf("layout_dir must be relative to fixture root: %q", layoutDir)
+	}
+	return clean
+}
+
 func MustUSBVolumeRoot(t *testing.T, opts USBVolumeOptions) string {
 	t.Helper()
 	root := t.TempDir()
 	cfg := USBVolumeConfig{
 		SchemaVersion: 1,
-		LayoutDir:     opts.LayoutDir,
+		LayoutDir:     mustRelativeLayoutDir(t, opts.LayoutDir),
 		Strategy:      opts.Strategy,
 		CreatedAt:     time.Now().UTC(),
-	}
-	if cfg.LayoutDir == "" {
-		cfg.LayoutDir = "repos"
 	}
 	if cfg.Strategy == "" {
 		cfg.Strategy = "git-mirror"
@@ -53,9 +65,7 @@ func WriteUSBVolumeConfig(t *testing.T, root string, cfg USBVolumeConfig) {
 	if cfg.SchemaVersion <= 0 {
 		cfg.SchemaVersion = 1
 	}
-	if cfg.LayoutDir == "" {
-		cfg.LayoutDir = "repos"
-	}
+	cfg.LayoutDir = mustRelativeLayoutDir(t, cfg.LayoutDir)
 	if cfg.Strategy == "" {
 		cfg.Strategy = "git-mirror"
 	}
@@ -95,7 +105,10 @@ func ReadUSBVolumeConfig(t *testing.T, root string) USBVolumeConfig {
 		val = strings.Trim(strings.TrimSpace(val), "\"")
 		switch key {
 		case "schema_version":
-			n, _ := strconv.Atoi(val)
+			n, err := strconv.Atoi(val)
+			if err != nil {
+				t.Fatalf("invalid schema_version %q: %v", val, err)
+			}
 			cfg.SchemaVersion = n
 		case "layout_dir":
 			cfg.LayoutDir = val
@@ -129,6 +142,10 @@ func FileURLForPath(t *testing.T, path string) string {
 	if err != nil {
 		t.Fatalf("failed to make abs path: %v", err)
 	}
-	u := &url.URL{Scheme: "file", Path: filepath.ToSlash(abs)}
+	uPath := filepath.ToSlash(abs)
+	if filepath.VolumeName(abs) != "" && !strings.HasPrefix(uPath, "/") {
+		uPath = "/" + uPath
+	}
+	u := &url.URL{Scheme: "file", Path: uPath}
 	return u.String()
 }
