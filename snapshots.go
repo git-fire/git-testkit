@@ -13,7 +13,7 @@ import (
 
 func normalizeSnapshotName(path string) string {
 	name := filepath.Base(path)
-	if name == "." || name == string(filepath.Separator) {
+	if name == "." || name == ".." || name == string(filepath.Separator) {
 		return "snapshot"
 	}
 	return name

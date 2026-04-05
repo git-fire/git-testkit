@@ -79,6 +79,22 @@ func TestSnapshotRepoNormalizesTrailingDotPath(t *testing.T) {
 	_ = RestoreSnapshot(t, snap)
 }
 
+func TestNormalizeSnapshotNameHandlesDotDot(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{input: "..", want: "snapshot"},
+		{input: filepath.Join("foo", ".."), want: "snapshot"},
+	}
+
+	for _, tt := range tests {
+		if got := normalizeSnapshotName(tt.input); got != tt.want {
+			t.Fatalf("normalizeSnapshotName(%q) = %q, want %q", tt.input, got, tt.want)
+		}
+	}
+}
+
 func TestLoadSnapshotFromDiskUsesBaseName(t *testing.T) {
 	_, repo := CreateCleanRepoScenario(t)
 	snapshot := SnapshotRepo(t, repo.path)
