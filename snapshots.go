@@ -242,6 +242,9 @@ func LoadSnapshotFromDisk(t *testing.T, filePath string) *Snapshot {
 
 // SaveSnapshotToDiskE saves a snapshot to disk and returns errors.
 func SaveSnapshotToDiskE(snapshot *Snapshot, filePath string) error {
+	if err := os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
+		return err
+	}
 	return os.WriteFile(filePath, snapshot.tarball, 0644)
 }
 

@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -23,13 +24,14 @@ class CliBridgeTest {
   }
 
   @Test
-  void createBareRemoteAndPushSmokeFlow() {
+  void createBareRemoteAndPushSmokeFlow() throws Exception {
     CliBridge bridge = new CliBridge(Path.of("../..").toAbsolutePath().normalize());
     String remote = bridge.createBareRemote(tmp, "origin");
     String local = bridge.createTestRepo(tmp, "local");
 
     bridge.runGitCmd(local, "remote", "add", "origin", remote);
     bridge.runGitCmd(local, "checkout", "-b", "feature");
+    Files.writeString(Path.of(local, "README.md"), "feature\n", StandardOpenOption.APPEND);
     bridge.runGitCmd(local, "add", "README.md");
     bridge.runGitCmd(local, "commit", "-m", "update readme");
     bridge.runGitCmd(local, "push", "origin", "feature");
