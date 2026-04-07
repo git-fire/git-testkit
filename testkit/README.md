@@ -1,6 +1,6 @@
 ## Spec-kit integration
 
-This repository uses a spec-kit style workspace under `testkit/.specify`.
+This repository uses a spec-kit-style workspace under `testkit/.specify`.
 
 ### Structure
 
@@ -24,7 +24,7 @@ Use existing smoke tests as the executable conformance path:
 
 - Python: `cd testkit/python && python3 -m pytest tests/ -v`
 - Java: `cd testkit/java && mvn test`
-- Go regression: `cd /workspace && go test ./...`
+- Go regression: from repository root, run `go test ./...`
 
 ### CI/CD wiring
 

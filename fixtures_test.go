@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -195,5 +196,69 @@ func TestQueryHelpersIgnoreGitTraceStderr(t *testing.T) {
 	}
 	if got := remotes["origin"]; got != remotePath {
 		t.Fatalf("expected origin remote %q, got %q", remotePath, got)
+	}
+}
+
+func TestCreateTestRepoInDir_InvalidName(t *testing.T) {
+	tmp := t.TempDir()
+
+	if _, err := testutil.CreateTestRepoInDir(tmp, testutil.RepoOptions{Name: ""}); err == nil {
+		t.Fatal("expected error for empty repo name")
+	}
+	if _, err := testutil.CreateTestRepoInDir(tmp, testutil.RepoOptions{Name: "../escape"}); err == nil {
+		t.Fatal("expected error for traversal repo name")
+	}
+	if _, err := testutil.CreateTestRepoInDir(tmp, testutil.RepoOptions{Name: "nested/repo"}); err == nil {
+		t.Fatal("expected error for nested repo name")
+	}
+	if _, err := testutil.CreateTestRepoInDir(tmp, testutil.RepoOptions{Name: `nested\repo`}); err == nil {
+		t.Fatal("expected error for separator in repo name")
+	}
+
+	absoluteName := "/tmp/abs-repo"
+	if runtime.GOOS == "windows" {
+		absoluteName = `C:\abs-repo`
+	}
+	if _, err := testutil.CreateTestRepoInDir(tmp, testutil.RepoOptions{Name: absoluteName}); err == nil {
+		t.Fatal("expected error for absolute repo name")
+	}
+}
+
+func TestCreateBareRemoteInDir_InvalidName(t *testing.T) {
+	tmp := t.TempDir()
+
+	if _, err := testutil.CreateBareRemoteInDir(tmp, ""); err == nil {
+		t.Fatal("expected error for empty remote name")
+	}
+	if _, err := testutil.CreateBareRemoteInDir(tmp, "../escape"); err == nil {
+		t.Fatal("expected error for traversal remote name")
+	}
+	if _, err := testutil.CreateBareRemoteInDir(tmp, "nested/remote"); err == nil {
+		t.Fatal("expected error for nested remote name")
+	}
+	if _, err := testutil.CreateBareRemoteInDir(tmp, `nested\remote`); err == nil {
+		t.Fatal("expected error for separator in remote name")
+	}
+}
+
+func TestCreateTestRepoInDir_RestoresOriginalBranch(t *testing.T) {
+	tmp := t.TempDir()
+	repoPath, err := testutil.CreateTestRepoInDir(tmp, testutil.RepoOptions{
+		Name:     "branch-restore",
+		Branches: []string{"feature-a", "feature-b"},
+	})
+	if err != nil {
+		t.Fatalf("CreateTestRepoInDir failed: %v", err)
+	}
+
+	currentBranch, err := testutil.RunGitCmdE(repoPath, "rev-parse", "--abbrev-ref", "HEAD")
+	if err != nil {
+		t.Fatalf("failed to read current branch: %v", err)
+	}
+	if currentBranch == "feature-a" || currentBranch == "feature-b" {
+		t.Fatalf("expected repo to restore original branch, got branch %q", currentBranch)
+	}
+	if _, err := testutil.RunGitCmdE(repoPath, "show-ref", "--verify", "--quiet", "refs/heads/"+currentBranch); err != nil {
+		t.Fatalf("expected current branch %q to exist: %v", currentBranch, err)
 	}
 }

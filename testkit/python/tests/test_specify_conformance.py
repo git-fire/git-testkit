@@ -10,7 +10,7 @@ def test_specify_contract_snapshot_smoke(tmp_path: Path) -> None:
     snapshot_name, snapshot_size = client.save_snapshot(repo, snapshot_path)
     restored = client.load_restore_snapshot(snapshot_path, tmp_path)
 
-    assert snapshot_name == "specify-contract"
+    assert snapshot_name == Path(repo).name
     assert snapshot_size > 0
     assert Path(restored).exists()
     assert client.get_current_sha(restored) == client.get_current_sha(repo)

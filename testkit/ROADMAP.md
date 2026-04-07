@@ -17,10 +17,10 @@ Deliverables:
 
 1. Keep existing Go `testing.T` APIs for backward compatibility.
 2. Add reusable error-returning Go APIs that do not depend on `testing.T`.
-3. Add CLI binary (`testkit/cli`) with JSON request/response protocol.
+3. Add CLI binary (`cmd/git-testkit-cli`) with JSON request/response protocol.
 4. Add Python and Java thin wrappers that shell out to the CLI.
 5. Add smoke tests proving fixture -> scenario-like flow -> snapshot round-trip.
-6. Add reverse-spec-kit artifact set under `.specify/`:
+6. Add spec-kit artifact set under `.specify/`:
    - constitution (`.specify/memory/constitution.md`)
    - feature spec (`.specify/specs/001-polyglot-testkit/spec.md`)
    - implementation plan (`.specify/specs/001-polyglot-testkit/plan.md`)

@@ -190,17 +190,18 @@ public final class CliBridge {
 
   private String invoke(String payload) {
     CliResult result = runCli(payload);
-    if (result.code != 0) {
-      String stderr = result.stderr == null ? "" : result.stderr;
+    String stdout = result.stdout == null ? "" : result.stdout.trim();
+    String stderr = result.stderr == null ? "" : result.stderr.trim();
+    if (stdout.isBlank() && result.code != 0) {
       throw new RuntimeException("CLI failed with code " + result.code + ": " + stderr);
     }
-    if (result.stdout == null || result.stdout.isBlank()) {
+    if (stdout.isBlank()) {
       throw new RuntimeException("CLI returned empty response");
     }
-    String stdout = result.stdout.trim();
-    if (!stdout.contains("\"ok\":true")) {
+    if (result.code != 0 || !stdout.contains("\"ok\":true")) {
       String error = extractOptional(stdout, ERROR_PATTERN);
-      throw new RuntimeException(error.isEmpty() ? "CLI returned failure response" : error);
+      throw new RuntimeException(
+          error.isEmpty() ? "CLI failed with code " + result.code + ": " + stderr : error);
     }
     return stdout;
   }

@@ -63,12 +63,8 @@ func main() {
 }
 
 func parseRequest() (request, error) {
-	raw, err := os.ReadFile("/dev/stdin")
-	if err != nil {
-		return request{}, fmt.Errorf("failed reading stdin: %w", err)
-	}
 	var req request
-	if err := json.Unmarshal(raw, &req); err != nil {
+	if err := json.NewDecoder(os.Stdin).Decode(&req); err != nil {
 		return request{}, fmt.Errorf("invalid JSON request: %w", err)
 	}
 	if strings.TrimSpace(req.Op) == "" {

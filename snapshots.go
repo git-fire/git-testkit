@@ -76,10 +76,13 @@ func SnapshotRepoE(repoPath string) (*Snapshot, error) {
 			if err != nil {
 				return fmt.Errorf("failed to open file %s: %w", path, err)
 			}
-			defer file.Close()
 
 			if _, err := io.Copy(tarWriter, file); err != nil {
+				file.Close()
 				return fmt.Errorf("failed to write file %s to tar: %w", path, err)
+			}
+			if err := file.Close(); err != nil {
+				return fmt.Errorf("failed to close file %s: %w", path, err)
 			}
 		}
 

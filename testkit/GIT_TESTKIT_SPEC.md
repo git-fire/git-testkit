@@ -49,7 +49,7 @@ Behavior:
    - stages and commits with message `Add <filename>`.
 4. Adds configured remotes.
 5. Creates each branch in `branches` via checkout-new branch.
-6. If branches were created, returns checkout to `main` if present, otherwise `master`.
+6. If branches were created, returns checkout to the original branch that was active right after initial repository creation.
 7. If `dirty` is true, writes an uncommitted file (unstaged).
 
 Postconditions:

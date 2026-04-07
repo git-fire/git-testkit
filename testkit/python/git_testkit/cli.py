@@ -25,10 +25,21 @@ def _call(op: str, **payload: Any) -> dict[str, Any]:
         capture_output=True,
         check=False,
     )
+    stdout = (proc.stdout or "").strip()
+    stderr = (proc.stderr or "").strip()
     if proc.returncode != 0:
-        raise RuntimeError(f"git-testkit-cli exited {proc.returncode}: {proc.stderr.strip()}")
+        if stdout:
+            try:
+                response = json.loads(stdout)
+            except json.JSONDecodeError:
+                response = {}
+            if not response.get("ok", True) and response.get("error"):
+                raise RuntimeError(str(response["error"]))
+        raise RuntimeError(
+            f"git-testkit-cli exited {proc.returncode}: {stderr}; stdout: {stdout}"
+        )
 
-    response = json.loads(proc.stdout)
+    response = json.loads(stdout)
     if not response.get("ok", False):
         raise RuntimeError(response.get("error", "unknown git-testkit-cli error"))
     return response
