@@ -2,7 +2,7 @@
 
 **Feature**: `001-polyglot-testkit`  
 **Input**: `testkit/.specify/specs/001-polyglot-testkit/spec.md`  
-**Status**: Implemented (baseline)
+**Status**: Implemented (canonical spec-kit baseline)
 
 ## Summary
 
@@ -36,6 +36,15 @@ Deliver a reusable polyglot interface to `git-testkit` by exposing Go core behav
   - **Mitigation**: Keep wrappers thin; assert behavior through smoke tests using real repos.
 - **Risk**: Snapshot edge cases (unsafe paths, parent dirs).
   - **Mitigation**: enforce safe joins and explicit snapshot save directory creation.
+
+## CI/CD wiring (spec-kit)
+
+The root CI workflow enforces spec-kit + implementation alignment:
+
+1. Existing Go matrix checks (`go vet`, `go test ./...`).
+2. Spec-kit artifact validation via `testkit/.specify/scripts/validate_specify.sh`.
+3. Python bridge conformance (`python3 -m pytest tests/ -v` in `testkit/python`).
+4. Java bridge conformance (`mvn test` in `testkit/java`).
 
 ## Phase 2 placeholder (Option B)
 

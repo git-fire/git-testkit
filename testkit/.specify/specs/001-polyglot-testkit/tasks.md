@@ -25,4 +25,5 @@
 - [x] T012 Add spec-kit-style spec in `.specify/specs/001-polyglot-testkit/spec.md`
 - [x] T013 Add spec-kit-style plan in `.specify/specs/001-polyglot-testkit/plan.md`
 - [x] T014 Add this task ledger in `.specify/specs/001-polyglot-testkit/tasks.md`
-- [ ] T015 Add reverse spec-kit command workflow doc + shell helper
+- [x] T015 Add spec-kit command workflow doc + shell helper
+- [x] T016 Wire CI workflow to enforce spec-kit artifacts + polyglot smoke suites

@@ -1,6 +1,6 @@
-## Reverse spec-kit integration
+## Spec-kit integration
 
-This repository now includes a reverse-engineered spec-kit style workspace under `testkit/.specify`.
+This repository uses a spec-kit style workspace under `testkit/.specify`.
 
 ### Structure
 
@@ -25,3 +25,12 @@ Use existing smoke tests as the executable conformance path:
 - Python: `cd testkit/python && python3 -m pytest tests/ -v`
 - Java: `cd testkit/java && mvn test`
 - Go regression: `cd /workspace && go test ./...`
+
+### CI/CD wiring
+
+`/.github/workflows/ci.yml` now enforces spec-kit alignment and bridge conformance on pull requests:
+
+1. spec-kit artifact validation via `testkit/.specify/scripts/validate_specify.sh`
+2. Go vet + tests
+3. Python wrapper conformance tests
+4. Java wrapper conformance tests

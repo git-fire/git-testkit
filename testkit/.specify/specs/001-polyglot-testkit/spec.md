@@ -2,7 +2,7 @@
 
 **Feature Branch**: `001-polyglot-testkit`  
 **Created**: 2026-04-07  
-**Status**: Draft  
+**Status**: Implemented (canonical spec-kit baseline)  
 **Input**: User description: "reverse-spec existing Go git-testkit API and deliver polyglot reuse with high DevEx and adoption"
 
 ## User Scenarios & Testing *(mandatory)*
