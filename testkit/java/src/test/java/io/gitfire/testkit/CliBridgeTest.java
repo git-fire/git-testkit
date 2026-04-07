@@ -53,4 +53,17 @@ class CliBridgeTest {
     assertTrue(Files.exists(Path.of(restored.path())));
     assertEquals(bridge.getCurrentSha(repo), bridge.getCurrentSha(restored.path()));
   }
+
+  @Test
+  void specKitLayoutExists() {
+    Path workspaceRoot = Path.of("../..").toAbsolutePath().normalize();
+    assertTrue(Files.exists(workspaceRoot.resolve("testkit/.specify/memory/constitution.md")));
+    assertTrue(Files.exists(workspaceRoot.resolve("testkit/.specify/specs/001-polyglot-testkit/spec.md")));
+    assertTrue(Files.exists(workspaceRoot.resolve("testkit/.specify/specs/001-polyglot-testkit/plan.md")));
+    assertTrue(Files.exists(workspaceRoot.resolve("testkit/.specify/specs/001-polyglot-testkit/tasks.md")));
+    assertTrue(
+        Files.exists(
+            workspaceRoot.resolve(
+                "testkit/.specify/specs/001-polyglot-testkit/contracts/cli-protocol.json")));
+  }
 }

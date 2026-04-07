@@ -20,12 +20,19 @@ Deliverables:
 3. Add CLI binary (`testkit/cli`) with JSON request/response protocol.
 4. Add Python and Java thin wrappers that shell out to the CLI.
 5. Add smoke tests proving fixture -> scenario-like flow -> snapshot round-trip.
+6. Add reverse-spec-kit artifact set under `.specify/`:
+   - constitution (`.specify/memory/constitution.md`)
+   - feature spec (`.specify/specs/001-polyglot-testkit/spec.md`)
+   - implementation plan (`.specify/specs/001-polyglot-testkit/plan.md`)
+   - tasks (`.specify/specs/001-polyglot-testkit/tasks.md`)
+   - protocol contract and quality checklist
 
 Success criteria:
 
 - Existing Go tests stay green.
 - CLI handles core fixture and snapshot operations.
 - Python and Java smoke tests pass against real `git`.
+- `.specify` artifacts remain executable and aligned with test commands in `tasks.md`.
 
 ## Phase 2 (Option B): Native ports
 
