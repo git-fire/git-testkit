@@ -43,7 +43,7 @@ type response struct {
 	SHA          string            `json:"sha,omitempty"`
 	Branches     []string          `json:"branches,omitempty"`
 	SnapshotName string            `json:"snapshotName,omitempty"`
-	SnapshotSize int               `json:"snapshotSize,omitempty"`
+	SnapshotSize int               `json:"snapshotSize"`
 	RestorePath  string            `json:"restorePath,omitempty"`
 }
 

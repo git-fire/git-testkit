@@ -370,6 +370,39 @@ public final class CliBridge {
   }
 
   private static String escape(String value) {
-    return value.replace("\\", "\\\\").replace("\"", "\\\"");
+    StringBuilder sb = new StringBuilder(value.length());
+    for (int i = 0; i < value.length(); i++) {
+      char ch = value.charAt(i);
+      switch (ch) {
+        case '"':
+          sb.append("\\\"");
+          break;
+        case '\\':
+          sb.append("\\\\");
+          break;
+        case '\b':
+          sb.append("\\b");
+          break;
+        case '\f':
+          sb.append("\\f");
+          break;
+        case '\n':
+          sb.append("\\n");
+          break;
+        case '\r':
+          sb.append("\\r");
+          break;
+        case '\t':
+          sb.append("\\t");
+          break;
+        default:
+          if (ch < 0x20) {
+            sb.append(String.format("\\u%04x", (int) ch));
+          } else {
+            sb.append(ch);
+          }
+      }
+    }
+    return sb.toString();
   }
 }
