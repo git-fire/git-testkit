@@ -26,13 +26,6 @@ type Snapshot struct {
 	tarball []byte // Compressed repository state in memory
 }
 
-// NewSnapshot creates a snapshot instance from raw data.
-func NewSnapshot(name string, payload []byte) *Snapshot {
-	copied := make([]byte, len(payload))
-	copy(copied, payload)
-	return &Snapshot{name: name, tarball: copied}
-}
-
 // SnapshotRepo creates an in-memory snapshot of a repository
 // This allows fast restoration of expensive test setups
 func SnapshotRepo(t *testing.T, repoPath string) *Snapshot {
@@ -213,13 +206,6 @@ func (s *Snapshot) Size() int {
 // SnapshotName returns the name of the snapshot
 func (s *Snapshot) Name() string {
 	return s.name
-}
-
-// Payload returns a copy of snapshot bytes.
-func (s *Snapshot) Payload() []byte {
-	copied := make([]byte, len(s.tarball))
-	copy(copied, s.tarball)
-	return copied
 }
 
 // SaveSnapshotToDisk saves a snapshot to a file (for debugging or caching)

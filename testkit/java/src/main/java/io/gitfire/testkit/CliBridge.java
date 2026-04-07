@@ -7,6 +7,10 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -202,21 +206,35 @@ public final class CliBridge {
   }
 
   private CliResult runCli(String payload) {
+    ExecutorService streamReaderPool = null;
     try {
       ProcessBuilder pb = new ProcessBuilder("bash", "-lc", cliCommand);
       pb.directory(workspaceRoot.toFile());
       Process process = pb.start();
+      streamReaderPool = Executors.newFixedThreadPool(2);
+      Future<String> stdoutFuture =
+          streamReaderPool.submit(
+              () -> new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8));
+      Future<String> stderrFuture =
+          streamReaderPool.submit(
+              () -> new String(process.getErrorStream().readAllBytes(), StandardCharsets.UTF_8));
       process.getOutputStream().write(payload.getBytes(StandardCharsets.UTF_8));
       process.getOutputStream().close();
       int code = process.waitFor();
-      String stdout = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-      String stderr = new String(process.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
+      String stdout = stdoutFuture.get();
+      String stderr = stderrFuture.get();
       return new CliResult(stdout, stderr, code);
     } catch (IOException ex) {
       throw new RuntimeException("failed to invoke CLI", ex);
+    } catch (ExecutionException ex) {
+      throw new RuntimeException("failed to read CLI output", ex);
     } catch (InterruptedException ex) {
       Thread.currentThread().interrupt();
       throw new RuntimeException("interrupted while invoking CLI", ex);
+    } finally {
+      if (streamReaderPool != null) {
+        streamReaderPool.shutdownNow();
+      }
     }
   }
 

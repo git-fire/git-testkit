@@ -2,7 +2,9 @@ package testutil_test
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	testutil "github.com/git-fire/git-testkit"
@@ -149,5 +151,49 @@ func TestSetupFakeFilesystem(t *testing.T) {
 		if _, err := os.Stat(dirPath); os.IsNotExist(err) {
 			t.Fatalf("Expected directory to exist: %s", dirPath)
 		}
+	}
+}
+
+func TestQueryHelpersIgnoreGitTraceStderr(t *testing.T) {
+	t.Setenv("GIT_TRACE", "1")
+
+	remotePath := testutil.CreateBareRemote(t, "origin")
+	repoPath := testutil.CreateTestRepo(t, testutil.RepoOptions{
+		Name: "trace-safe-repo",
+		Remotes: map[string]string{
+			"origin": remotePath,
+		},
+	})
+
+	dirty, err := testutil.IsDirtyE(repoPath)
+	if err != nil {
+		t.Fatalf("IsDirtyE failed: %v", err)
+	}
+	if dirty {
+		t.Fatal("expected clean repo to remain clean when git writes trace to stderr")
+	}
+
+	sha, err := testutil.GetCurrentSHAE(repoPath)
+	if err != nil {
+		t.Fatalf("GetCurrentSHAE failed: %v", err)
+	}
+
+	cmd := exec.Command("git", "rev-parse", "HEAD")
+	cmd.Dir = repoPath
+	expectedSHABytes, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("failed to get expected sha: %v", err)
+	}
+	expectedSHA := strings.TrimSpace(string(expectedSHABytes))
+	if sha != expectedSHA {
+		t.Fatalf("expected sha %q, got %q", expectedSHA, sha)
+	}
+
+	remotes, err := testutil.GetRemotesE(repoPath)
+	if err != nil {
+		t.Fatalf("GetRemotesE failed: %v", err)
+	}
+	if got := remotes["origin"]; got != remotePath {
+		t.Fatalf("expected origin remote %q, got %q", remotePath, got)
 	}
 }

@@ -218,9 +218,18 @@ func RunGitCmdE(dir string, args ...string) (string, error) {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
 
-	output, err := cmd.CombinedOutput()
+	output, err := cmd.Output()
 	if err != nil {
-		return "", fmt.Errorf("git command failed: git %v\nOutput: %s\nError: %w", args, output, err)
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			return "", fmt.Errorf(
+				"git command failed: git %v\nStdout: %s\nStderr: %s\nError: %w",
+				args,
+				strings.TrimSpace(string(output)),
+				strings.TrimSpace(string(exitErr.Stderr)),
+				err,
+			)
+		}
+		return "", fmt.Errorf("git command failed: git %v\nError: %w", args, err)
 	}
 	return strings.TrimSpace(string(output)), nil
 }
