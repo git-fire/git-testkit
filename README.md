@@ -113,6 +113,10 @@ func TestUsingSnapshot(t *testing.T) {
 - Helpers fail tests immediately (`t.Fatalf`) when git commands fail, so errors surface close to setup code.
 - When tests build large repo graphs repeatedly, prefer snapshot/restore to reduce total runtime.
 
+## Origin
+
+`git-testkit` was extracted from [git-fire](https://github.com/git-fire/git-fire) before its public launch and published as a standalone Go library. The test helpers had accumulated enough utility to be useful on their own, so they were split out to let other projects automate real Git repositories without depending on git-fire itself.
+
 ## Developer docs
 
 - See `DEVELOPER_GUIDE.md` for:
