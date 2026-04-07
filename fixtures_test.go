@@ -197,6 +197,27 @@ func TestQueryHelpersIgnoreGitTraceStderr(t *testing.T) {
 	if got := remotes["origin"]; got != remotePath {
 		t.Fatalf("expected origin remote %q, got %q", remotePath, got)
 	}
+
+	branches, err := testutil.GetBranchesE(repoPath)
+	if err != nil {
+		t.Fatalf("GetBranchesE failed: %v", err)
+	}
+	if len(branches) == 0 {
+		t.Fatal("expected at least one branch")
+	}
+}
+
+func TestGetBranchesE_UsesRunGitCmdEErrorFormatting(t *testing.T) {
+	_, err := testutil.GetBranchesE(filepath.Join(t.TempDir(), "missing-repo"))
+	if err == nil {
+		t.Fatal("expected GetBranchesE to fail for missing repo")
+	}
+	if !strings.Contains(err.Error(), "git command failed: git [branch --format=%(refname:short)]") {
+		t.Fatalf("expected wrapped git command context, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "Stderr:") {
+		t.Fatalf("expected stderr details in error, got: %v", err)
+	}
 }
 
 func TestCreateTestRepoInDir_InvalidName(t *testing.T) {

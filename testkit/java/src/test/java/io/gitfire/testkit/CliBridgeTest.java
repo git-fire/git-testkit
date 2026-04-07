@@ -7,11 +7,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 class CliBridgeTest {
   @TempDir Path tmp;
+
+  private CliBridge bridgeWithJsonResponse(String json) {
+    String cliCommand = "cat >/dev/null; printf '%s\\n' '" + json + "'";
+    return new CliBridge(Path.of("../..").toAbsolutePath().normalize(), cliCommand);
+  }
 
   @Test
   void createTestRepoProducesCleanRepoAndBranches() {
@@ -65,5 +71,47 @@ class CliBridgeTest {
         Files.exists(
             workspaceRoot.resolve(
                 "testkit/.specify/specs/001-polyglot-testkit/contracts/cli-protocol.json")));
+  }
+
+  @Test
+  void runGitCmdParsesQuotedOutput() {
+    CliBridge bridge =
+        bridgeWithJsonResponse("{\"ok\":true,\"output\":\"hello \\\"world\\\" from git\"}");
+
+    String output = bridge.runGitCmd("/tmp/repo", "log", "-1");
+
+    assertEquals("hello \"world\" from git", output);
+  }
+
+  @Test
+  void createTestRepoUnescapesBackslashes() {
+    CliBridge bridge = bridgeWithJsonResponse("{\"ok\":true,\"repoPath\":\"C:\\\\Users\\\\test\"}");
+
+    String repoPath = bridge.createTestRepo(tmp, "subject");
+
+    assertEquals("C:\\Users\\test", repoPath);
+  }
+
+  @Test
+  void getRemotesParsesCommasAndBracesInsideValues() {
+    CliBridge bridge =
+        bridgeWithJsonResponse(
+            "{\"ok\":true,\"remotes\":{\"origin\":\"/tmp/repo,name}suffix\",\"upstream\":\"ssh://example.com/r,2\"}}");
+
+    var remotes = bridge.getRemotes("/tmp/repo");
+
+    assertEquals("/tmp/repo,name}suffix", remotes.get("origin"));
+    assertEquals("ssh://example.com/r,2", remotes.get("upstream"));
+  }
+
+  @Test
+  void getBranchesParsesBracketAndQuotesInsideValues() {
+    CliBridge bridge =
+        bridgeWithJsonResponse(
+            "{\"ok\":true,\"branches\":[\"main\",\"feature]x\",\"quoted \\\"branch\\\"\"]}");
+
+    var branches = bridge.getBranches("/tmp/repo");
+
+    assertEquals(List.of("main", "feature]x", "quoted \"branch\""), branches);
   }
 }

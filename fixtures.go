@@ -348,15 +348,12 @@ func GetCurrentSHAE(repoPath string) (string, error) {
 
 // GetBranchesE returns all branches in a repo.
 func GetBranchesE(repoPath string) ([]string, error) {
-	cmd := exec.Command("git", "branch", "--format=%(refname:short)")
-	cmd.Dir = repoPath
-
-	output, err := cmd.Output()
+	output, err := RunGitCmdE(repoPath, "branch", "--format=%(refname:short)")
 	if err != nil {
 		return nil, err
 	}
 
-	branches := strings.Split(strings.TrimSpace(string(output)), "\n")
+	branches := strings.Split(strings.TrimSpace(output), "\n")
 
 	// Filter out empty lines
 	var result []string
