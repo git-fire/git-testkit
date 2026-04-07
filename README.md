@@ -1,5 +1,11 @@
 # git-testkit
 
+[![CI](https://github.com/git-fire/git-testkit/actions/workflows/ci.yml/badge.svg)](https://github.com/git-fire/git-testkit/actions/workflows/ci.yml)
+[![Go Reference](https://pkg.go.dev/badge/github.com/git-fire/git-testkit.svg)](https://pkg.go.dev/github.com/git-fire/git-testkit)
+[![Go 1.22+](https://img.shields.io/badge/go-1.22+-blue.svg)](https://golang.org/dl/)
+[![Latest Release](https://img.shields.io/github/v/release/git-fire/git-testkit)](https://github.com/git-fire/git-testkit/releases/latest)
+[![MIT License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
 `git-testkit` provides helpers for writing Go tests that exercise real Git repositories.
 
 ## Why use this
@@ -112,6 +118,10 @@ func TestUsingSnapshot(t *testing.T) {
 - Snapshots are intended for deterministic test fixtures and only restore regular files/directories.
 - Helpers fail tests immediately (`t.Fatalf`) when git commands fail, so errors surface close to setup code.
 - When tests build large repo graphs repeatedly, prefer snapshot/restore to reduce total runtime.
+
+## Origin
+
+`git-testkit` was extracted from [git-fire](https://github.com/git-fire/git-fire) before its public launch and published as a standalone Go library. The test helpers had accumulated enough utility to be useful on their own, so they were split out to let other projects automate real Git repositories without depending on git-fire itself.
 
 ## Developer docs
 
