@@ -6,6 +6,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -145,12 +146,12 @@ public final class CliBridge {
     }
   }
 
-  private final String cliCommand;
+  private final List<String> cliCommandArgs;
   private final Path workspaceRoot;
   private final java.util.function.Function<String, CliResult> cliInvoker;
 
   public CliBridge(Path workspaceRoot) {
-    this(workspaceRoot, "go run ./cmd/git-testkit-cli");
+    this(workspaceRoot, List.of("go", "run", "./cmd/git-testkit-cli"), null);
   }
 
   public CliBridge() {
@@ -158,20 +159,31 @@ public final class CliBridge {
   }
 
   public CliBridge(Path workspaceRoot, String cliCommand) {
-    this(workspaceRoot, cliCommand, null);
+    this(workspaceRoot, shellCommand(cliCommand), null);
   }
 
   CliBridge(Path workspaceRoot, java.util.function.Function<String, CliResult> cliInvoker) {
-    this(workspaceRoot, "", cliInvoker);
+    this(workspaceRoot, List.of("go", "run", "./cmd/git-testkit-cli"), cliInvoker);
   }
 
   CliBridge(
       Path workspaceRoot,
-      String cliCommand,
+      List<String> cliCommandArgs,
       java.util.function.Function<String, CliResult> cliInvoker) {
     this.workspaceRoot = workspaceRoot;
-    this.cliCommand = cliCommand;
+    this.cliCommandArgs = List.copyOf(cliCommandArgs);
     this.cliInvoker = cliInvoker;
+  }
+
+  private static List<String> shellCommand(String cliCommand) {
+    if (isWindows()) {
+      return List.of("cmd", "/c", cliCommand);
+    }
+    return List.of("sh", "-lc", cliCommand);
+  }
+
+  private static boolean isWindows() {
+    return System.getProperty("os.name").toLowerCase(Locale.ROOT).contains("win");
   }
 
   private static Path detectWorkspaceRoot() {
@@ -348,7 +360,7 @@ public final class CliBridge {
     }
     ExecutorService streamReaderPool = null;
     try {
-      ProcessBuilder pb = new ProcessBuilder("bash", "-lc", cliCommand);
+      ProcessBuilder pb = new ProcessBuilder(cliCommandArgs);
       pb.directory(workspaceRoot.toFile());
       Process process = pb.start();
       streamReaderPool = Executors.newFixedThreadPool(2);
