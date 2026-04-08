@@ -36,14 +36,29 @@ public class SampleRepoFlowSmoke {
     if (!Files.exists(root)) {
       return;
     }
-    try (var stream = Files.walk(root)) {
-      stream.sorted((a, b) -> b.compareTo(a)).forEach(path -> {
-        try {
-          Files.deleteIfExists(path);
-        } catch (Exception ex) {
-          throw new RuntimeException(ex);
+    RuntimeException lastFailure = null;
+    // Windows can hold file handles briefly after git child processes exit.
+    for (int attempt = 1; attempt <= 10; attempt++) {
+      try (var stream = Files.walk(root)) {
+        stream.sorted((a, b) -> b.compareTo(a)).forEach(path -> {
+          try {
+            Files.deleteIfExists(path);
+          } catch (Exception ex) {
+            throw new RuntimeException(ex);
+          }
+        });
+      } catch (RuntimeException ex) {
+        lastFailure = ex;
+        if (attempt == 10) {
+          throw ex;
         }
-      });
+        Thread.sleep(100L * attempt);
+        continue;
+      }
+      return;
+    }
+    if (lastFailure != null) {
+      throw lastFailure;
     }
   }
 }
