@@ -129,5 +129,3 @@ class GitTestKitClient:
     def snapshot_load_restore(self, snapshot_path: Path | str, base_dir: Path | str) -> str:
         return self.load_restore_snapshot(snapshot_path, base_dir)
 
-
-GitTestKitCLI = GitTestKitClient

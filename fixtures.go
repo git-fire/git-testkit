@@ -85,14 +85,18 @@ func CreateTestRepoInDir(baseDir string, opts RepoOptions) (string, error) {
 	}
 
 	for filename, content := range opts.Files {
-		filePath := filepath.Join(repoPath, filename)
+		relPath, err := validateFixturePath(filename)
+		if err != nil {
+			return "", fmt.Errorf("invalid file path %q: %w", filename, err)
+		}
+		filePath := filepath.Join(repoPath, relPath)
 		if err := os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
 			return "", fmt.Errorf("failed to create directory for %s: %w", filename, err)
 		}
 		if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
 			return "", fmt.Errorf("failed to create file %s: %w", filename, err)
 		}
-		if _, err := RunGitCmdE(repoPath, "add", filename); err != nil {
+		if _, err := RunGitCmdE(repoPath, "add", "--", filepath.ToSlash(relPath)); err != nil {
 			return "", err
 		}
 		if _, err := RunGitCmdE(repoPath, "commit", "-m", "Add "+filename); err != nil {
@@ -262,6 +266,25 @@ func validateSimpleName(name string) (string, error) {
 		return "", fmt.Errorf("path separators are not allowed")
 	}
 	return trimmed, nil
+}
+
+func validateFixturePath(name string) (string, error) {
+	trimmed := strings.TrimSpace(name)
+	if trimmed == "" {
+		return "", fmt.Errorf("path cannot be empty")
+	}
+	clean := filepath.Clean(trimmed)
+	if filepath.IsAbs(clean) {
+		return "", fmt.Errorf("absolute paths are not allowed")
+	}
+	if clean == "." || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("path traversal is not allowed")
+	}
+	parts := strings.Split(clean, string(filepath.Separator))
+	if len(parts) > 0 && strings.EqualFold(parts[0], ".git") {
+		return "", fmt.Errorf(".git paths are not allowed")
+	}
+	return clean, nil
 }
 
 // GetCurrentSHA returns the current commit SHA

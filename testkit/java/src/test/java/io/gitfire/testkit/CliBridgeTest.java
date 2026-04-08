@@ -4,9 +4,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.Base64;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -15,7 +17,11 @@ class CliBridgeTest {
   @TempDir Path tmp;
 
   private CliBridge bridgeWithJsonResponse(String json) {
-    String cliCommand = "cat >/dev/null; printf '%s\\n' '" + json + "'";
+    String encoded = Base64.getEncoder().encodeToString(json.getBytes(StandardCharsets.UTF_8));
+    String cliCommand =
+        "python3 -c \"import base64;print(base64.b64decode('"
+            + encoded
+            + "').decode('utf-8'))\"";
     return new CliBridge(Path.of("../..").toAbsolutePath().normalize(), cliCommand);
   }
 

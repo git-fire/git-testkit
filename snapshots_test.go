@@ -1,8 +1,12 @@
 package testutil
 
 import (
+	"archive/tar"
+	"bytes"
+	"compress/gzip"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -114,5 +118,46 @@ func TestLoadSnapshotFromDiskUsesBaseName(t *testing.T) {
 	restoredPath := RestoreSnapshot(t, loaded)
 	if got, want := filepath.Base(restoredPath), loaded.Name(); got != want {
 		t.Fatalf("expected restore dir base %q, got %q", want, got)
+	}
+}
+
+func TestRestoreSnapshotRejectsUnsupportedEntryTypes(t *testing.T) {
+	var buf bytes.Buffer
+	gw := gzip.NewWriter(&buf)
+	tw := tar.NewWriter(gw)
+
+	// Add directory root entry for restore target.
+	if err := tw.WriteHeader(&tar.Header{
+		Name:     "repo",
+		Typeflag: tar.TypeDir,
+		Mode:     0755,
+	}); err != nil {
+		t.Fatalf("failed to write dir header: %v", err)
+	}
+
+	// Add symlink entry that restore does not support.
+	if err := tw.WriteHeader(&tar.Header{
+		Name:     "repo/link",
+		Typeflag: tar.TypeSymlink,
+		Linkname: "target",
+		Mode:     0777,
+	}); err != nil {
+		t.Fatalf("failed to write symlink header: %v", err)
+	}
+
+	if err := tw.Close(); err != nil {
+		t.Fatalf("failed to close tar writer: %v", err)
+	}
+	if err := gw.Close(); err != nil {
+		t.Fatalf("failed to close gzip writer: %v", err)
+	}
+
+	snapshot := &Snapshot{name: "repo", tarball: buf.Bytes()}
+	_, err := RestoreSnapshotToDir(snapshot, t.TempDir())
+	if err == nil {
+		t.Fatal("expected RestoreSnapshotToDir to fail on unsupported tar entry")
+	}
+	if got := err.Error(); !strings.Contains(got, "unsupported snapshot entry type") {
+		t.Fatalf("expected unsupported entry error, got: %v", err)
 	}
 }

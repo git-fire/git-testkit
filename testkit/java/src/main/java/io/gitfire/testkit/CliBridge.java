@@ -61,12 +61,25 @@ public final class CliBridge {
   }
 
   public CliBridge() {
-    this(Path.of(System.getProperty("user.dir")));
+    this(detectWorkspaceRoot());
   }
 
   public CliBridge(Path workspaceRoot, String cliCommand) {
     this.workspaceRoot = workspaceRoot;
     this.cliCommand = cliCommand;
+  }
+
+  private static Path detectWorkspaceRoot() {
+    Path current = Path.of(System.getProperty("user.dir")).toAbsolutePath().normalize();
+    Path probe = current;
+    while (probe != null) {
+      if (java.nio.file.Files.exists(probe.resolve("go.mod"))
+          && java.nio.file.Files.exists(probe.resolve("cmd/git-testkit-cli/main.go"))) {
+        return probe;
+      }
+      probe = probe.getParent();
+    }
+    return current;
   }
 
   public String createTestRepo(Path baseDir, String name) {

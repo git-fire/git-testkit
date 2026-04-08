@@ -62,8 +62,7 @@ jobs:
       - name: Run Java sample smoke implementations
         run: |
           cd testkit/java
-          mvn -Dtest=SampleRepoFlowSmoke test
-          mvn -Dtest=SampleSnapshotFlowSmoke test
+          mvn -Dtest=SampleRepoFlowSmoke,SampleSnapshotFlowSmoke test
 
   test:
     runs-on: ubuntu-latest

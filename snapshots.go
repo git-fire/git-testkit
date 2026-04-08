@@ -170,7 +170,11 @@ func RestoreSnapshotToDir(snapshot *Snapshot, baseDir string) (string, error) {
 				return "", fmt.Errorf("failed closing file %s: %w", targetPath, err)
 			}
 		default:
-			continue
+			return "", fmt.Errorf(
+				"unsupported snapshot entry type %d for %q",
+				header.Typeflag,
+				header.Name,
+			)
 		}
 	}
 

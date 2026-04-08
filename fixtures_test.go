@@ -283,3 +283,27 @@ func TestCreateTestRepoInDir_RestoresOriginalBranch(t *testing.T) {
 		t.Fatalf("expected current branch %q to exist: %v", currentBranch, err)
 	}
 }
+
+func TestCreateTestRepoInDir_RejectsUnsafeFixturePaths(t *testing.T) {
+	tmp := t.TempDir()
+
+	_, err := testutil.CreateTestRepoInDir(tmp, testutil.RepoOptions{
+		Name: "unsafe-files",
+		Files: map[string]string{
+			"../escape.txt": "nope",
+		},
+	})
+	if err == nil {
+		t.Fatal("expected traversal fixture path to be rejected")
+	}
+
+	_, err = testutil.CreateTestRepoInDir(tmp, testutil.RepoOptions{
+		Name: "unsafe-git-files",
+		Files: map[string]string{
+			".git/config": "nope",
+		},
+	})
+	if err == nil {
+		t.Fatal("expected .git fixture path to be rejected")
+	}
+}
