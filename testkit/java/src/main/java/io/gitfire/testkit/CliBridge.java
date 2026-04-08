@@ -151,7 +151,7 @@ public final class CliBridge {
   private final java.util.function.Function<String, CliResult> cliInvoker;
 
   public CliBridge(Path workspaceRoot) {
-    this(workspaceRoot, List.of("go", "run", "./cmd/git-testkit-cli"), null);
+    this(workspaceRoot, defaultCliCommandArgs(), null);
   }
 
   public CliBridge() {
@@ -163,7 +163,7 @@ public final class CliBridge {
   }
 
   CliBridge(Path workspaceRoot, java.util.function.Function<String, CliResult> cliInvoker) {
-    this(workspaceRoot, List.of("go", "run", "./cmd/git-testkit-cli"), cliInvoker);
+    this(workspaceRoot, defaultCliCommandArgs(), cliInvoker);
   }
 
   CliBridge(
@@ -180,6 +180,14 @@ public final class CliBridge {
       return List.of("cmd", "/c", cliCommand);
     }
     return List.of("sh", "-lc", cliCommand);
+  }
+
+  private static List<String> defaultCliCommandArgs() {
+    String configuredCli = System.getenv("GIT_TESTKIT_CLI");
+    if (configuredCli != null && !configuredCli.isBlank()) {
+      return shellCommand(configuredCli);
+    }
+    return List.of("go", "run", "./cmd/git-testkit-cli");
   }
 
   private static boolean isWindows() {

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -14,6 +15,9 @@ def _repo_root() -> Path:
 
 
 def _cli_cmd() -> list[str]:
+    cli = os.environ.get("GIT_TESTKIT_CLI", "").strip()
+    if cli:
+        return [cli]
     return ["go", "run", "./cmd/git-testkit-cli"]
 
 

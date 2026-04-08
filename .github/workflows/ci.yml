@@ -84,7 +84,7 @@ jobs:
         run: go vet ./...
 
       - name: Check gofmt
-        run: test -z "$(gofmt -l *.go)"
+        run: test -z "$(gofmt -l .)"
 
       - name: Run tests
         run: go test ./...
@@ -105,6 +105,16 @@ jobs:
         with:
           go-version: "stable"
 
+      - name: Build git-testkit CLI binary once
+        shell: bash
+        run: |
+          mkdir -p bin
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            go build -o ./bin/git-testkit-cli.exe ./cmd/git-testkit-cli
+          else
+            go build -o ./bin/git-testkit-cli ./cmd/git-testkit-cli
+          fi
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
@@ -119,6 +129,8 @@ jobs:
 
       - name: Run Python wrapper smoke tests
         shell: bash
+        env:
+          GIT_TESTKIT_CLI: ${{ matrix.os == 'windows-latest' && './bin/git-testkit-cli.exe' || './bin/git-testkit-cli' }}
         run: |
           cd testkit/python
           python -m pip install -e ".[dev]"
@@ -126,6 +138,8 @@ jobs:
 
       - name: Run Java wrapper smoke tests
         shell: bash
+        env:
+          GIT_TESTKIT_CLI: ${{ matrix.os == 'windows-latest' && './bin/git-testkit-cli.exe' || './bin/git-testkit-cli' }}
         run: |
           cd testkit/java
           mvn -Dtest=CliBridgeTest,SampleRepoFlowSmoke,SampleSnapshotFlowSmoke test
