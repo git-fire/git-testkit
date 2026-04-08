@@ -29,6 +29,8 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: "stable"
+      - name: Build git-testkit CLI binary once
+        run: go build ./cmd/git-testkit-cli
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -47,11 +49,21 @@ jobs:
           cd testkit/python
           python -m pip install -e ".[dev]"
           python -m pytest tests/ -v
+      - name: Run Python sample smoke implementations
+        run: |
+          cd testkit/python
+          python -m samples.smoke_repo_flow
+          python -m samples.smoke_snapshot_flow
 
       - name: Run Java spec conformance smoke tests
         run: |
           cd testkit/java
           mvn test
+      - name: Run Java sample smoke implementations
+        run: |
+          cd testkit/java
+          mvn -Dtest=SampleRepoFlowSmoke test
+          mvn -Dtest=SampleSnapshotFlowSmoke test
 
   test:
     runs-on: ubuntu-latest

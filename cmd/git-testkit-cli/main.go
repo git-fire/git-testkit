@@ -37,7 +37,7 @@ type response struct {
 	RepoPath     string            `json:"repoPath,omitempty"`
 	RemotePath   string            `json:"remotePath,omitempty"`
 	FSRoot       string            `json:"fsRoot,omitempty"`
-	Output       string            `json:"output,omitempty"`
+	Output       *string           `json:"output,omitempty"`
 	Dirty        *bool             `json:"dirty,omitempty"`
 	Remotes      map[string]string `json:"remotes,omitempty"`
 	SHA          string            `json:"sha,omitempty"`
@@ -129,7 +129,7 @@ func handle(req request) (response, error) {
 		if err != nil {
 			return response{}, err
 		}
-		return response{OK: true, Output: output}, nil
+		return response{OK: true, Output: stringPtr(output)}, nil
 
 	case "is_dirty":
 		if req.RepoPath == "" {
@@ -258,5 +258,9 @@ func writeResponse(res response) {
 }
 
 func intPtr(v int) *int {
+	return &v
+}
+
+func stringPtr(v string) *string {
 	return &v
 }

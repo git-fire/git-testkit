@@ -17,6 +17,7 @@ import java.util.regex.Pattern;
 public final class CliBridge {
   private static final Pattern ERROR_PATTERN =
       Pattern.compile("\"error\"\\s*:\\s*\"((?:\\\\.|[^\\\\\"])*)\"");
+  private static final Pattern OK_PATTERN = Pattern.compile("\"ok\"\\s*:\\s*(true|false)");
   private static final Pattern REPO_PATH_PATTERN =
       Pattern.compile("\"repoPath\"\\s*:\\s*\"((?:\\\\.|[^\\\\\"])*)\"");
   private static final Pattern REMOTE_PATH_PATTERN =
@@ -205,7 +206,8 @@ public final class CliBridge {
     if (stdout.isBlank()) {
       throw new RuntimeException("CLI returned empty response");
     }
-    if (result.code != 0 || !stdout.contains("\"ok\":true")) {
+    String ok = extractOptional(stdout, OK_PATTERN);
+    if (result.code != 0 || !"true".equals(ok)) {
       String error = extractOptional(stdout, ERROR_PATTERN);
       throw new RuntimeException(
           error.isEmpty() ? "CLI failed with code " + result.code + ": " + stderr : error);
