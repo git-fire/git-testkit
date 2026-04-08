@@ -13,6 +13,7 @@ def main() -> None:
         repo = client.create_test_repo(root, name="smoke-snapshot")
 
         snapshot_path = root / "snapshots" / "smoke-snapshot.tar.gz"
+        snapshot_path.parent.mkdir(parents=True, exist_ok=True)
         snapshot_name, snapshot_size = client.save_snapshot(repo, snapshot_path)
         restored_path = client.load_restore_snapshot(snapshot_path, root)
 

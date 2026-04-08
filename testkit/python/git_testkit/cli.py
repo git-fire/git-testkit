@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+_CLI_TIMEOUT_SECONDS = 60
+
 
 def _repo_root() -> Path:
     return Path(__file__).resolve().parents[3]
@@ -17,14 +19,20 @@ def _cli_cmd() -> list[str]:
 
 def _call(op: str, **payload: Any) -> dict[str, Any]:
     request = {"op": op, **payload}
-    proc = subprocess.run(
-        _cli_cmd(),
-        cwd=_repo_root(),
-        input=json.dumps(request),
-        text=True,
-        capture_output=True,
-        check=False,
-    )
+    try:
+        proc = subprocess.run(
+            _cli_cmd(),
+            cwd=_repo_root(),
+            input=json.dumps(request),
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=_CLI_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(
+            f"git-testkit-cli timed out after {_CLI_TIMEOUT_SECONDS}s (op={op})"
+        ) from exc
     stdout = (proc.stdout or "").strip()
     stderr = (proc.stderr or "").strip()
     if proc.returncode != 0:
@@ -39,7 +47,12 @@ def _call(op: str, **payload: Any) -> dict[str, Any]:
             f"git-testkit-cli exited {proc.returncode}: {stderr}; stdout: {stdout}"
         )
 
-    response = json.loads(stdout)
+    try:
+        response = json.loads(stdout)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(
+            f"invalid JSON from git-testkit-cli: {stdout!r}; stderr: {stderr}"
+        ) from exc
     if not response.get("ok", False):
         raise RuntimeError(response.get("error", "unknown git-testkit-cli error"))
     return response
