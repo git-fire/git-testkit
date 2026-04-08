@@ -24,7 +24,7 @@ Use existing smoke tests as the executable conformance path:
 
 - Python: `cd testkit/python && python3 -m pytest tests/ -v`
 - Java: `cd testkit/java && mvn test`
-- Go regression: from repository root, run `go test ./...`
+- Go regression: from the repository root (the directory containing `go.mod`), run `go test ./...`
 
 ### CI/CD wiring
 

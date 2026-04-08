@@ -45,21 +45,29 @@ jobs:
           cache: maven
 
       - name: Run Python spec conformance smoke tests
+        env:
+          GIT_TESTKIT_CLI: ./git-testkit-cli
         run: |
           cd testkit/python
           python -m pip install -e ".[dev]"
           python -m pytest tests/ -v
       - name: Run Python sample smoke implementations
+        env:
+          GIT_TESTKIT_CLI: ./git-testkit-cli
         run: |
           cd testkit/python
           python -m samples.smoke_repo_flow
           python -m samples.smoke_snapshot_flow
 
       - name: Run Java spec conformance smoke tests
+        env:
+          GIT_TESTKIT_CLI: ./git-testkit-cli
         run: |
           cd testkit/java
           mvn test
       - name: Run Java sample smoke implementations
+        env:
+          GIT_TESTKIT_CLI: ./git-testkit-cli
         run: |
           cd testkit/java
           mvn -Dtest=SampleRepoFlowSmoke,SampleSnapshotFlowSmoke test
