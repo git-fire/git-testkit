@@ -12,6 +12,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.nio.file.Paths;
@@ -152,7 +153,7 @@ public final class CliBridge {
   private final java.util.function.Function<String, CliResult> cliInvoker;
 
   public CliBridge(Path workspaceRoot) {
-    this(workspaceRoot, defaultCliCommandArgs(), null);
+    this(workspaceRoot, defaultCliCommandArgs(workspaceRoot), null);
   }
 
   public CliBridge() {
@@ -164,7 +165,7 @@ public final class CliBridge {
   }
 
   CliBridge(Path workspaceRoot, java.util.function.Function<String, CliResult> cliInvoker) {
-    this(workspaceRoot, defaultCliCommandArgs(), cliInvoker);
+    this(workspaceRoot, defaultCliCommandArgs(workspaceRoot), cliInvoker);
   }
 
   CliBridge(
@@ -183,14 +184,14 @@ public final class CliBridge {
     return List.of("sh", "-lc", cliCommand);
   }
 
-  private static List<String> defaultCliCommandArgs() {
+  private static List<String> defaultCliCommandArgs(Path workspaceRoot) {
     String configuredCli = System.getenv("GIT_TESTKIT_CLI");
     if (configuredCli != null && !configuredCli.isBlank()) {
       Path cliPath = Paths.get(configuredCli);
       if (!cliPath.isAbsolute()) {
-        cliPath = detectWorkspaceRoot().resolve(cliPath).normalize();
+        cliPath = workspaceRoot.resolve(cliPath).normalize();
       }
-      return shellCommand(cliPath.toString());
+      return List.of(cliPath.toString());
     }
     return List.of("go", "run", "./cmd/git-testkit-cli");
   }
@@ -371,21 +372,28 @@ public final class CliBridge {
     if (cliInvoker != null) {
       return cliInvoker.apply(payload);
     }
+    Process process = null;
     ExecutorService streamReaderPool = null;
+    Future<String> stdoutFuture = null;
+    Future<String> stderrFuture = null;
     try {
       ProcessBuilder pb = new ProcessBuilder(cliCommandArgs);
       pb.directory(workspaceRoot.toFile());
-      Process process = pb.start();
+      process = pb.start();
       streamReaderPool = Executors.newFixedThreadPool(2);
-      Future<String> stdoutFuture =
+      stdoutFuture =
           streamReaderPool.submit(
               () -> new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8));
-      Future<String> stderrFuture =
+      stderrFuture =
           streamReaderPool.submit(
               () -> new String(process.getErrorStream().readAllBytes(), StandardCharsets.UTF_8));
       process.getOutputStream().write(payload.getBytes(StandardCharsets.UTF_8));
       process.getOutputStream().close();
-      int code = process.waitFor();
+      boolean completed = process.waitFor(120, TimeUnit.SECONDS);
+      if (!completed) {
+        throw new RuntimeException("CLI process timed out after 120 seconds");
+      }
+      int code = process.exitValue();
       String stdout = stdoutFuture.get();
       String stderr = stderrFuture.get();
       return new CliResult(stdout, stderr, code);
@@ -397,8 +405,22 @@ public final class CliBridge {
       Thread.currentThread().interrupt();
       throw new RuntimeException("interrupted while invoking CLI", ex);
     } finally {
+      if (process != null && process.isAlive()) {
+        process.destroyForcibly();
+      }
+      if (stdoutFuture != null) {
+        stdoutFuture.cancel(true);
+      }
+      if (stderrFuture != null) {
+        stderrFuture.cancel(true);
+      }
       if (streamReaderPool != null) {
         streamReaderPool.shutdownNow();
+        try {
+          streamReaderPool.awaitTermination(5, TimeUnit.SECONDS);
+        } catch (InterruptedException ex) {
+          Thread.currentThread().interrupt();
+        }
       }
     }
   }
