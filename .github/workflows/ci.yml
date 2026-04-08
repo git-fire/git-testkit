@@ -130,7 +130,7 @@ jobs:
       - name: Run Python wrapper smoke tests
         shell: bash
         env:
-          GIT_TESTKIT_CLI: ${{ matrix.os == 'windows-latest' && './bin/git-testkit-cli.exe' || './bin/git-testkit-cli' }}
+          GIT_TESTKIT_CLI: ${{ matrix.os == 'windows-latest' && '../../bin/git-testkit-cli.exe' || '../../bin/git-testkit-cli' }}
         run: |
           cd testkit/python
           python -m pip install -e ".[dev]"
@@ -139,7 +139,7 @@ jobs:
       - name: Run Java wrapper smoke tests
         shell: bash
         env:
-          GIT_TESTKIT_CLI: ${{ matrix.os == 'windows-latest' && './bin/git-testkit-cli.exe' || './bin/git-testkit-cli' }}
+          GIT_TESTKIT_CLI: ${{ matrix.os == 'windows-latest' && '../../bin/git-testkit-cli.exe' || '../../bin/git-testkit-cli' }}
         run: |
           cd testkit/java
           mvn -Dtest=CliBridgeTest,SampleRepoFlowSmoke,SampleSnapshotFlowSmoke test
