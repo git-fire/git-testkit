@@ -2,7 +2,10 @@ package testutil_test
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 
 	testutil "github.com/git-fire/git-testkit"
@@ -149,5 +152,158 @@ func TestSetupFakeFilesystem(t *testing.T) {
 		if _, err := os.Stat(dirPath); os.IsNotExist(err) {
 			t.Fatalf("Expected directory to exist: %s", dirPath)
 		}
+	}
+}
+
+func TestQueryHelpersIgnoreGitTraceStderr(t *testing.T) {
+	t.Setenv("GIT_TRACE", "1")
+
+	remotePath := testutil.CreateBareRemote(t, "origin")
+	repoPath := testutil.CreateTestRepo(t, testutil.RepoOptions{
+		Name: "trace-safe-repo",
+		Remotes: map[string]string{
+			"origin": remotePath,
+		},
+	})
+
+	dirty, err := testutil.IsDirtyE(repoPath)
+	if err != nil {
+		t.Fatalf("IsDirtyE failed: %v", err)
+	}
+	if dirty {
+		t.Fatal("expected clean repo to remain clean when git writes trace to stderr")
+	}
+
+	sha, err := testutil.GetCurrentSHAE(repoPath)
+	if err != nil {
+		t.Fatalf("GetCurrentSHAE failed: %v", err)
+	}
+
+	cmd := exec.Command("git", "rev-parse", "HEAD")
+	cmd.Dir = repoPath
+	expectedSHABytes, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("failed to get expected sha: %v", err)
+	}
+	expectedSHA := strings.TrimSpace(string(expectedSHABytes))
+	if sha != expectedSHA {
+		t.Fatalf("expected sha %q, got %q", expectedSHA, sha)
+	}
+
+	remotes, err := testutil.GetRemotesE(repoPath)
+	if err != nil {
+		t.Fatalf("GetRemotesE failed: %v", err)
+	}
+	if got := remotes["origin"]; got != remotePath {
+		t.Fatalf("expected origin remote %q, got %q", remotePath, got)
+	}
+
+	branches, err := testutil.GetBranchesE(repoPath)
+	if err != nil {
+		t.Fatalf("GetBranchesE failed: %v", err)
+	}
+	if len(branches) == 0 {
+		t.Fatal("expected at least one branch")
+	}
+}
+
+func TestGetBranchesE_UsesRunGitCmdEErrorFormatting(t *testing.T) {
+	_, err := testutil.GetBranchesE(filepath.Join(t.TempDir(), "missing-repo"))
+	if err == nil {
+		t.Fatal("expected GetBranchesE to fail for missing repo")
+	}
+	if !strings.Contains(err.Error(), "git command failed: git [branch --format=%(refname:short)]") {
+		t.Fatalf("expected wrapped git command context, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "Stderr:") {
+		t.Fatalf("expected stderr details in error, got: %v", err)
+	}
+}
+
+func TestCreateTestRepoInDir_InvalidName(t *testing.T) {
+	tmp := t.TempDir()
+
+	if _, err := testutil.CreateTestRepoInDir(tmp, testutil.RepoOptions{Name: ""}); err == nil {
+		t.Fatal("expected error for empty repo name")
+	}
+	if _, err := testutil.CreateTestRepoInDir(tmp, testutil.RepoOptions{Name: "../escape"}); err == nil {
+		t.Fatal("expected error for traversal repo name")
+	}
+	if _, err := testutil.CreateTestRepoInDir(tmp, testutil.RepoOptions{Name: "nested/repo"}); err == nil {
+		t.Fatal("expected error for nested repo name")
+	}
+	if _, err := testutil.CreateTestRepoInDir(tmp, testutil.RepoOptions{Name: `nested\repo`}); err == nil {
+		t.Fatal("expected error for separator in repo name")
+	}
+
+	absoluteName := "/tmp/abs-repo"
+	if runtime.GOOS == "windows" {
+		absoluteName = `C:\abs-repo`
+	}
+	if _, err := testutil.CreateTestRepoInDir(tmp, testutil.RepoOptions{Name: absoluteName}); err == nil {
+		t.Fatal("expected error for absolute repo name")
+	}
+}
+
+func TestCreateBareRemoteInDir_InvalidName(t *testing.T) {
+	tmp := t.TempDir()
+
+	if _, err := testutil.CreateBareRemoteInDir(tmp, ""); err == nil {
+		t.Fatal("expected error for empty remote name")
+	}
+	if _, err := testutil.CreateBareRemoteInDir(tmp, "../escape"); err == nil {
+		t.Fatal("expected error for traversal remote name")
+	}
+	if _, err := testutil.CreateBareRemoteInDir(tmp, "nested/remote"); err == nil {
+		t.Fatal("expected error for nested remote name")
+	}
+	if _, err := testutil.CreateBareRemoteInDir(tmp, `nested\remote`); err == nil {
+		t.Fatal("expected error for separator in remote name")
+	}
+}
+
+func TestCreateTestRepoInDir_RestoresOriginalBranch(t *testing.T) {
+	tmp := t.TempDir()
+	repoPath, err := testutil.CreateTestRepoInDir(tmp, testutil.RepoOptions{
+		Name:     "branch-restore",
+		Branches: []string{"feature-a", "feature-b"},
+	})
+	if err != nil {
+		t.Fatalf("CreateTestRepoInDir failed: %v", err)
+	}
+
+	currentBranch, err := testutil.RunGitCmdE(repoPath, "rev-parse", "--abbrev-ref", "HEAD")
+	if err != nil {
+		t.Fatalf("failed to read current branch: %v", err)
+	}
+	if currentBranch == "feature-a" || currentBranch == "feature-b" {
+		t.Fatalf("expected repo to restore original branch, got branch %q", currentBranch)
+	}
+	if _, err := testutil.RunGitCmdE(repoPath, "show-ref", "--verify", "--quiet", "refs/heads/"+currentBranch); err != nil {
+		t.Fatalf("expected current branch %q to exist: %v", currentBranch, err)
+	}
+}
+
+func TestCreateTestRepoInDir_RejectsUnsafeFixturePaths(t *testing.T) {
+	tmp := t.TempDir()
+
+	_, err := testutil.CreateTestRepoInDir(tmp, testutil.RepoOptions{
+		Name: "unsafe-files",
+		Files: map[string]string{
+			"../escape.txt": "nope",
+		},
+	})
+	if err == nil {
+		t.Fatal("expected traversal fixture path to be rejected")
+	}
+
+	_, err = testutil.CreateTestRepoInDir(tmp, testutil.RepoOptions{
+		Name: "unsafe-git-files",
+		Files: map[string]string{
+			".git/config": "nope",
+		},
+	})
+	if err == nil {
+		t.Fatal("expected .git fixture path to be rejected")
 	}
 }

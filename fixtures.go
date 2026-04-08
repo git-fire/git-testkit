@@ -1,6 +1,8 @@
 package testutil
 
 import (
+	"bytes"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -34,102 +36,145 @@ type RepoOptions struct {
 func CreateTestRepo(t *testing.T, opts RepoOptions) string {
 	t.Helper()
 
-	// Create temp directory
-	tmpDir := t.TempDir()
-	repoPath := filepath.Join(tmpDir, opts.Name)
+	repoPath, err := CreateTestRepoInDir(t.TempDir(), opts)
+	if err != nil {
+		t.Fatalf("Failed to create test repo: %v", err)
+	}
+	return repoPath
+}
+
+// CreateTestRepoInDir creates a test repository under the provided base directory.
+func CreateTestRepoInDir(baseDir string, opts RepoOptions) (string, error) {
+	repoName, err := validateSimpleName(opts.Name)
+	if err != nil {
+		return "", fmt.Errorf("invalid repo name %q: %w", opts.Name, err)
+	}
+	repoPath := filepath.Join(baseDir, repoName)
 
 	if err := os.MkdirAll(repoPath, 0755); err != nil {
-		t.Fatalf("Failed to create repo directory: %v", err)
+		return "", fmt.Errorf("failed to create repo directory: %w", err)
 	}
 
-	// Initialize git repo
-	runGit(t, repoPath, "init")
-	runGit(t, repoPath, "config", "user.email", "test@example.com")
-	runGit(t, repoPath, "config", "user.name", "Test User")
+	if _, err := RunGitCmdE(repoPath, "init"); err != nil {
+		return "", err
+	}
+	if _, err := RunGitCmdE(repoPath, "config", "user.email", "test@example.com"); err != nil {
+		return "", err
+	}
+	if _, err := RunGitCmdE(repoPath, "config", "user.name", "Test User"); err != nil {
+		return "", err
+	}
 
-	// Create initial commit (required for most operations)
-	initialFile := filepath.Join(repoPath, "README.md")
 	commitMsg := opts.InitialCommit
 	if commitMsg == "" {
 		commitMsg = "Initial commit"
 	}
-
+	initialFile := filepath.Join(repoPath, "README.md")
 	if err := os.WriteFile(initialFile, []byte("# Test Repo\n"), 0644); err != nil {
-		t.Fatalf("Failed to create README: %v", err)
+		return "", fmt.Errorf("failed to create README: %w", err)
+	}
+	if _, err := RunGitCmdE(repoPath, "add", "README.md"); err != nil {
+		return "", err
+	}
+	if _, err := RunGitCmdE(repoPath, "commit", "-m", commitMsg); err != nil {
+		return "", err
+	}
+	originalBranch, err := RunGitCmdE(repoPath, "rev-parse", "--abbrev-ref", "HEAD")
+	if err != nil {
+		return "", err
 	}
 
-	runGit(t, repoPath, "add", "README.md")
-	runGit(t, repoPath, "commit", "-m", commitMsg)
-
-	// Create additional files if specified
 	for filename, content := range opts.Files {
-		filePath := filepath.Join(repoPath, filename)
-
-		// Create parent directories if needed
-		dir := filepath.Dir(filePath)
-		if err := os.MkdirAll(dir, 0755); err != nil {
-			t.Fatalf("Failed to create directory for %s: %v", filename, err)
+		relPath, err := validateFixturePath(filename)
+		if err != nil {
+			return "", fmt.Errorf("invalid file path %q: %w", filename, err)
 		}
-
+		filePath := filepath.Join(repoPath, relPath)
+		if err := os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
+			return "", fmt.Errorf("failed to create directory for %s: %w", filename, err)
+		}
 		if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
-			t.Fatalf("Failed to create file %s: %v", filename, err)
+			return "", fmt.Errorf("failed to create file %s: %w", filename, err)
 		}
-		runGit(t, repoPath, "add", filename)
-		runGit(t, repoPath, "commit", "-m", "Add "+filename)
+		if _, err := RunGitCmdE(repoPath, "add", "--", filepath.ToSlash(relPath)); err != nil {
+			return "", err
+		}
+		if _, err := RunGitCmdE(repoPath, "commit", "-m", "Add "+filename); err != nil {
+			return "", err
+		}
 	}
 
-	// Add remotes
 	for name, url := range opts.Remotes {
-		runGit(t, repoPath, "remote", "add", name, url)
-	}
-
-	// Create branches
-	for _, branch := range opts.Branches {
-		runGit(t, repoPath, "checkout", "-b", branch)
-	}
-
-	// Return to main/master branch
-	if len(opts.Branches) > 0 {
-		// Try main first, fallback to master
-		if err := exec.Command("git", "-C", repoPath, "checkout", "main").Run(); err != nil {
-			runGit(t, repoPath, "checkout", "master")
+		if _, err := RunGitCmdE(repoPath, "remote", "add", name, url); err != nil {
+			return "", err
 		}
 	}
 
-	// Make repo dirty if requested
+	for _, branch := range opts.Branches {
+		if branch == originalBranch {
+			continue
+		}
+		if _, err := RunGitCmdE(repoPath, "checkout", "-b", branch); err != nil {
+			return "", err
+		}
+	}
+
+	if len(opts.Branches) > 0 {
+		if _, err := RunGitCmdE(repoPath, "checkout", originalBranch); err != nil {
+			return "", err
+		}
+	}
+
 	if opts.Dirty {
 		dirtyFile := filepath.Join(repoPath, "uncommitted.txt")
 		if err := os.WriteFile(dirtyFile, []byte("uncommitted changes\n"), 0644); err != nil {
-			t.Fatalf("Failed to create dirty file: %v", err)
+			return "", fmt.Errorf("failed to create dirty file: %w", err)
 		}
 	}
 
-	return repoPath
+	return repoPath, nil
 }
 
 // CreateBareRemote creates a bare git repository to use as a remote
 func CreateBareRemote(t *testing.T, name string) string {
 	t.Helper()
 
-	tmpDir := t.TempDir()
-	remotePath := filepath.Join(tmpDir, name+".git")
-
-	if err := os.MkdirAll(remotePath, 0755); err != nil {
-		t.Fatalf("Failed to create bare repo directory: %v", err)
+	remotePath, err := CreateBareRemoteInDir(t.TempDir(), name)
+	if err != nil {
+		t.Fatalf("Failed to create bare remote: %v", err)
 	}
-
-	runGit(t, remotePath, "init", "--bare")
-
 	return remotePath
+}
+
+// CreateBareRemoteInDir creates a bare remote repository under the provided base directory.
+func CreateBareRemoteInDir(baseDir, name string) (string, error) {
+	remoteName, err := validateSimpleName(name)
+	if err != nil {
+		return "", fmt.Errorf("invalid remote name %q: %w", name, err)
+	}
+	remotePath := filepath.Join(baseDir, remoteName+".git")
+	if err := os.MkdirAll(remotePath, 0755); err != nil {
+		return "", fmt.Errorf("failed to create bare repo directory: %w", err)
+	}
+	if _, err := RunGitCmdE(remotePath, "init", "--bare"); err != nil {
+		return "", err
+	}
+	return remotePath, nil
 }
 
 // SetupFakeFilesystem creates a fake filesystem structure for scanning tests
 func SetupFakeFilesystem(t *testing.T) string {
 	t.Helper()
 
-	tmpDir := t.TempDir()
+	root, err := SetupFakeFilesystemInDir(t.TempDir())
+	if err != nil {
+		t.Fatalf("Failed to setup fake filesystem: %v", err)
+	}
+	return root
+}
 
-	// Create directory structure
+// SetupFakeFilesystemInDir creates a deterministic fake filesystem tree under baseDir.
+func SetupFakeFilesystemInDir(baseDir string) (string, error) {
 	dirs := []string{
 		"home/testuser/projects",
 		"home/testuser/src",
@@ -138,27 +183,22 @@ func SetupFakeFilesystem(t *testing.T) string {
 		"root/sys",
 		"root/proc",
 	}
-
 	for _, dir := range dirs {
-		path := filepath.Join(tmpDir, dir)
+		path := filepath.Join(baseDir, dir)
 		if err := os.MkdirAll(path, 0755); err != nil {
-			t.Fatalf("Failed to create directory %s: %v", dir, err)
+			return "", fmt.Errorf("failed to create directory %s: %w", dir, err)
 		}
 	}
-
-	return tmpDir
+	return baseDir, nil
 }
 
 // runGit is a helper to run git commands in a specific directory
 func runGit(t *testing.T, dir string, args ...string) {
 	t.Helper()
 
-	cmd := exec.Command("git", args...)
-	cmd.Dir = dir
-
-	output, err := cmd.CombinedOutput()
+	_, err := RunGitCmdE(dir, args...)
 	if err != nil {
-		t.Fatalf("Git command failed: git %v\nOutput: %s\nError: %v", args, output, err)
+		t.Fatalf("%v", err)
 	}
 }
 
@@ -166,39 +206,133 @@ func runGit(t *testing.T, dir string, args ...string) {
 func IsDirty(t *testing.T, repoPath string) bool {
 	t.Helper()
 
-	cmd := exec.Command("git", "status", "--porcelain")
-	cmd.Dir = repoPath
-
-	output, err := cmd.Output()
+	dirty, err := IsDirtyE(repoPath)
 	if err != nil {
 		t.Fatalf("Failed to check git status: %v", err)
 	}
-
-	return len(output) > 0
+	return dirty
 }
 
 // GetRemotes returns the configured remotes for a repo
 func GetRemotes(t *testing.T, repoPath string) map[string]string {
 	t.Helper()
 
-	cmd := exec.Command("git", "remote", "-v")
-	cmd.Dir = repoPath
-
-	output, err := cmd.Output()
+	remotes, err := GetRemotesE(repoPath)
 	if err != nil {
 		t.Fatalf("Failed to get remotes: %v", err)
 	}
+	return remotes
+}
 
-	// Parse output into map
-	// Format: "origin	/path/to/remote (fetch)"
-	//         "origin	/path/to/remote (push)"
+// RunGitCmd runs a git command and fails the test if it errors
+// Exported version of runGit for use in other test packages
+func RunGitCmd(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	runGit(t, dir, args...)
+}
+
+// RunGitCmdE runs git command in dir and returns trimmed command output.
+func RunGitCmdE(dir string, args ...string) (string, error) {
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf(
+			"git command failed: git %v\nStdout: %s\nStderr: %s\nError: %w",
+			args,
+			strings.TrimSpace(string(output)),
+			strings.TrimSpace(stderr.String()),
+			err,
+		)
+	}
+	return strings.TrimSpace(string(output)), nil
+}
+
+func validateSimpleName(name string) (string, error) {
+	trimmed := strings.TrimSpace(name)
+	if trimmed == "" {
+		return "", fmt.Errorf("name cannot be empty")
+	}
+	if filepath.IsAbs(trimmed) {
+		return "", fmt.Errorf("absolute paths are not allowed")
+	}
+	if trimmed == "." || trimmed == ".." {
+		return "", fmt.Errorf("relative traversal segments are not allowed")
+	}
+	if strings.ContainsAny(trimmed, `/\`) {
+		return "", fmt.Errorf("path separators are not allowed")
+	}
+	return trimmed, nil
+}
+
+func validateFixturePath(name string) (string, error) {
+	trimmed := strings.TrimSpace(name)
+	if trimmed == "" {
+		return "", fmt.Errorf("path cannot be empty")
+	}
+	clean := filepath.Clean(trimmed)
+	if filepath.IsAbs(clean) {
+		return "", fmt.Errorf("absolute paths are not allowed")
+	}
+	if clean == "." || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("path traversal is not allowed")
+	}
+	parts := strings.Split(clean, string(filepath.Separator))
+	if len(parts) > 0 && strings.EqualFold(parts[0], ".git") {
+		return "", fmt.Errorf(".git paths are not allowed")
+	}
+	return clean, nil
+}
+
+// GetCurrentSHA returns the current commit SHA
+func GetCurrentSHA(t *testing.T, repoPath string) string {
+	t.Helper()
+
+	sha, err := GetCurrentSHAE(repoPath)
+	if err != nil {
+		t.Fatalf("Failed to get current SHA: %v", err)
+	}
+	return sha
+}
+
+// GetBranches returns all branches in the repo
+func GetBranches(t *testing.T, repoPath string) []string {
+	t.Helper()
+
+	branches, err := GetBranchesE(repoPath)
+	if err != nil {
+		t.Fatalf("Failed to get branches: %v", err)
+	}
+	return branches
+}
+
+// IsDirtyE checks if a git repo has uncommitted changes.
+func IsDirtyE(repoPath string) (bool, error) {
+	output, err := RunGitCmdE(repoPath, "status", "--porcelain")
+	if err != nil {
+		return false, err
+	}
+	return len(output) > 0, nil
+}
+
+// GetRemotesE returns configured remotes for a repo.
+func GetRemotesE(repoPath string) (map[string]string, error) {
+	output, err := RunGitCmdE(repoPath, "remote", "-v")
+	if err != nil {
+		return nil, err
+	}
+	return parseRemotesOutput(output), nil
+}
+
+func parseRemotesOutput(output string) map[string]string {
 	remotes := make(map[string]string)
-
-	lines := strings.TrimSpace(string(output))
+	lines := strings.TrimSpace(output)
 	if lines == "" {
 		return remotes
 	}
-
 	for _, line := range strings.Split(lines, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
@@ -206,7 +340,6 @@ func GetRemotes(t *testing.T, repoPath string) map[string]string {
 		}
 		name, remainder, ok := strings.Cut(line, "\t")
 		if !ok {
-			// Fallback for unusual formatting that does not use tabs.
 			idx := strings.IndexAny(line, " \t")
 			if idx == -1 {
 				continue
@@ -218,8 +351,6 @@ func GetRemotes(t *testing.T, repoPath string) map[string]string {
 			remainder = strings.TrimSpace(remainder)
 		}
 
-		// Strip only the trailing git remote role suffix once so paths that end
-		// with text like " (push)" are not damaged by sequential TrimSuffix calls.
 		if strings.HasSuffix(remainder, " (fetch)") {
 			remainder = strings.TrimSuffix(remainder, " (fetch)")
 		} else if strings.HasSuffix(remainder, " (push)") {
@@ -230,45 +361,22 @@ func GetRemotes(t *testing.T, repoPath string) map[string]string {
 			remotes[name] = remainder
 		}
 	}
-
 	return remotes
 }
 
-// RunGitCmd runs a git command and fails the test if it errors
-// Exported version of runGit for use in other test packages
-func RunGitCmd(t *testing.T, dir string, args ...string) {
-	t.Helper()
-	runGit(t, dir, args...)
+// GetCurrentSHAE returns the current commit SHA.
+func GetCurrentSHAE(repoPath string) (string, error) {
+	return RunGitCmdE(repoPath, "rev-parse", "HEAD")
 }
 
-// GetCurrentSHA returns the current commit SHA
-func GetCurrentSHA(t *testing.T, repoPath string) string {
-	t.Helper()
-
-	cmd := exec.Command("git", "rev-parse", "HEAD")
-	cmd.Dir = repoPath
-
-	output, err := cmd.Output()
+// GetBranchesE returns all branches in a repo.
+func GetBranchesE(repoPath string) ([]string, error) {
+	output, err := RunGitCmdE(repoPath, "branch", "--format=%(refname:short)")
 	if err != nil {
-		t.Fatalf("Failed to get current SHA: %v", err)
+		return nil, err
 	}
 
-	return strings.TrimSpace(string(output))
-}
-
-// GetBranches returns all branches in the repo
-func GetBranches(t *testing.T, repoPath string) []string {
-	t.Helper()
-
-	cmd := exec.Command("git", "branch", "--format=%(refname:short)")
-	cmd.Dir = repoPath
-
-	output, err := cmd.Output()
-	if err != nil {
-		t.Fatalf("Failed to get branches: %v", err)
-	}
-
-	branches := strings.Split(strings.TrimSpace(string(output)), "\n")
+	branches := strings.Split(strings.TrimSpace(output), "\n")
 
 	// Filter out empty lines
 	var result []string
@@ -278,5 +386,5 @@ func GetBranches(t *testing.T, repoPath string) []string {
 		}
 	}
 
-	return result
+	return result, nil
 }

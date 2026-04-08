@@ -1,0 +1,151 @@
+package io.gitfire.testkit;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import java.util.Map;
+import java.util.List;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+class CliBridgeTest {
+  @TempDir Path tmp;
+
+  private CliBridge bridgeWithJsonResponse(String json) {
+    return new CliBridge(
+        Path.of("../..").toAbsolutePath().normalize(),
+        payload -> new CliBridge.CliResult(json, "", 0));
+  }
+
+  @Test
+  void createTestRepoProducesCleanRepoAndBranches() {
+    CliBridge bridge = new CliBridge(Path.of("../..").toAbsolutePath().normalize());
+    String repo = bridge.createTestRepo(tmp, "subject");
+
+    assertTrue(Files.exists(Path.of(repo, ".git")));
+    assertFalse(bridge.isDirty(repo));
+    assertFalse(bridge.getBranches(repo).isEmpty());
+  }
+
+  @Test
+  void createTestRepoWithOptionsAppliesFileAndBranchState() throws Exception {
+    CliBridge bridge = new CliBridge(Path.of("../..").toAbsolutePath().normalize());
+    String remotePath = bridge.createBareRemote(tmp, "remote");
+    CliBridge.RepoOptions options =
+        CliBridge.RepoOptions.builder("subject")
+            .dirty(true)
+            .file("src/main.txt", "hello\n")
+            .remote("origin", remotePath)
+            .branch("feature/a")
+            .initialCommit("seed commit")
+            ;
+
+    String repo = bridge.createTestRepo(tmp, options);
+
+    assertTrue(Files.exists(Path.of(repo, "src/main.txt")));
+    assertTrue(bridge.getBranches(repo).contains("feature/a"));
+    assertEquals(remotePath, bridge.getRemotes(repo).get("origin"));
+    assertTrue(bridge.isDirty(repo));
+  }
+
+  @Test
+  void setupFakeFilesystemCreatesExpectedTree() {
+    CliBridge bridge = new CliBridge(Path.of("../..").toAbsolutePath().normalize());
+    String root = bridge.setupFakeFilesystem(tmp);
+    Path fsRoot = Path.of(root);
+
+    assertTrue(Files.exists(fsRoot.resolve("home/testuser/projects")));
+    assertTrue(Files.exists(fsRoot.resolve("home/testuser/.cache")));
+    assertTrue(Files.exists(fsRoot.resolve("root/sys")));
+  }
+
+  @Test
+  void createBareRemoteAndPushSmokeFlow() throws Exception {
+    CliBridge bridge = new CliBridge(Path.of("../..").toAbsolutePath().normalize());
+    String remote = bridge.createBareRemote(tmp, "origin");
+    String local = bridge.createTestRepo(tmp, "local");
+
+    bridge.runGitCmd(local, "remote", "add", "origin", remote);
+    bridge.runGitCmd(local, "checkout", "-b", "feature");
+    Files.writeString(Path.of(local, "README.md"), "feature\n", StandardOpenOption.APPEND);
+    bridge.runGitCmd(local, "add", "README.md");
+    bridge.runGitCmd(local, "commit", "-m", "update readme");
+    bridge.runGitCmd(local, "push", "origin", "feature");
+
+    String localSha = bridge.getCurrentSha(local);
+    String remoteSha = bridge.runGitCmd(remote, "rev-parse", "feature").trim();
+    assertEquals(localSha, remoteSha);
+  }
+
+  @Test
+  void snapshotRoundtripSmoke() {
+    CliBridge bridge = new CliBridge(Path.of("../..").toAbsolutePath().normalize());
+    String repo = bridge.createTestRepo(tmp, "snap");
+    Path snapshotPath = tmp.resolve("snapshots").resolve("snap.tar.gz");
+    CliBridge.SnapshotInfo info = bridge.snapshotSave(repo, snapshotPath.toString());
+    CliBridge.RestoredSnapshot restored = bridge.snapshotLoadRestore(tmp, snapshotPath.toString());
+
+    assertTrue(info.size() > 0);
+    assertTrue(Files.exists(Path.of(restored.path())));
+    assertEquals(bridge.getCurrentSha(repo), bridge.getCurrentSha(restored.path()));
+  }
+
+  @Test
+  void specKitLayoutExists() {
+    Path workspaceRoot = Path.of("../..").toAbsolutePath().normalize();
+    assertTrue(Files.exists(workspaceRoot.resolve("testkit/.specify/memory/constitution.md")));
+    assertTrue(Files.exists(workspaceRoot.resolve("testkit/.specify/specs/001-polyglot-testkit/spec.md")));
+    assertTrue(Files.exists(workspaceRoot.resolve("testkit/.specify/specs/001-polyglot-testkit/plan.md")));
+    assertTrue(Files.exists(workspaceRoot.resolve("testkit/.specify/specs/001-polyglot-testkit/tasks.md")));
+    assertTrue(
+        Files.exists(
+            workspaceRoot.resolve(
+                "testkit/.specify/specs/001-polyglot-testkit/contracts/cli-protocol.json")));
+  }
+
+  @Test
+  void runGitCmdParsesQuotedOutput() {
+    CliBridge bridge =
+        bridgeWithJsonResponse("{\"ok\":true,\"output\":\"hello \\\"world\\\" from git\"}");
+
+    String output = bridge.runGitCmd("/tmp/repo", "log", "-1");
+
+    assertEquals("hello \"world\" from git", output);
+  }
+
+  @Test
+  void createTestRepoUnescapesBackslashes() {
+    CliBridge bridge = bridgeWithJsonResponse("{\"ok\":true,\"repoPath\":\"C:\\\\Users\\\\test\"}");
+
+    String repoPath = bridge.createTestRepo(tmp, "subject");
+
+    assertEquals("C:\\Users\\test", repoPath);
+  }
+
+  @Test
+  void getRemotesParsesCommasAndBracesInsideValues() {
+    CliBridge bridge =
+        bridgeWithJsonResponse(
+            "{\"ok\":true,\"remotes\":{\"origin\":\"/tmp/repo,name}suffix\",\"upstream\":\"ssh://example.com/r,2\"}}");
+
+    var remotes = bridge.getRemotes("/tmp/repo");
+
+    assertEquals("/tmp/repo,name}suffix", remotes.get("origin"));
+    assertEquals("ssh://example.com/r,2", remotes.get("upstream"));
+  }
+
+  @Test
+  void getBranchesParsesBracketAndQuotesInsideValues() {
+    CliBridge bridge =
+        bridgeWithJsonResponse(
+            "{\"ok\":true,\"branches\":[\"main\",\"feature]x\",\"quoted \\\"branch\\\"\"]}");
+
+    var branches = bridge.getBranches("/tmp/repo");
+
+    assertEquals(List.of("main", "feature]x", "quoted \"branch\""), branches);
+  }
+}

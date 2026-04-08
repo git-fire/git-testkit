@@ -30,7 +30,15 @@ type Snapshot struct {
 // This allows fast restoration of expensive test setups
 func SnapshotRepo(t *testing.T, repoPath string) *Snapshot {
 	t.Helper()
+	snapshot, err := SnapshotRepoE(repoPath)
+	if err != nil {
+		t.Fatalf("Failed to create snapshot: %v", err)
+	}
+	return snapshot
+}
 
+// SnapshotRepoE creates an in-memory snapshot of a repository and returns errors.
+func SnapshotRepoE(repoPath string) (*Snapshot, error) {
 	var buf bytes.Buffer
 	gzipWriter := gzip.NewWriter(&buf)
 	tarWriter := tar.NewWriter(gzipWriter)
@@ -41,8 +49,23 @@ func SnapshotRepo(t *testing.T, repoPath string) *Snapshot {
 			return err
 		}
 
+		// Keep snapshot/restore symmetric: only archive entry types restore supports.
+		// This intentionally skips device files, sockets, and FIFOs.
+		if !supportsSnapshotEntry(info) {
+			return nil
+		}
+
+		linkTarget := ""
+		if info.Mode()&os.ModeSymlink != 0 {
+			target, err := os.Readlink(path)
+			if err != nil {
+				return fmt.Errorf("failed to read symlink %s: %w", path, err)
+			}
+			linkTarget = target
+		}
+
 		// Create tar header
-		header, err := tar.FileInfoHeader(info, "")
+		header, err := tar.FileInfoHeader(info, linkTarget)
 		if err != nil {
 			return fmt.Errorf("failed to create tar header: %w", err)
 		}
@@ -68,32 +91,37 @@ func SnapshotRepo(t *testing.T, repoPath string) *Snapshot {
 			if err != nil {
 				return fmt.Errorf("failed to open file %s: %w", path, err)
 			}
-			defer file.Close()
 
 			if _, err := io.Copy(tarWriter, file); err != nil {
+				file.Close()
 				return fmt.Errorf("failed to write file %s to tar: %w", path, err)
+			}
+			if err := file.Close(); err != nil {
+				return fmt.Errorf("failed to close file %s: %w", path, err)
 			}
 		}
 
 		return nil
 	})
-
 	if err != nil {
-		t.Fatalf("Failed to create snapshot: %v", err)
+		return nil, err
 	}
-
-	// Close writers
 	if err := tarWriter.Close(); err != nil {
-		t.Fatalf("Failed to close tar writer: %v", err)
+		return nil, fmt.Errorf("failed to close tar writer: %w", err)
 	}
 	if err := gzipWriter.Close(); err != nil {
-		t.Fatalf("Failed to close gzip writer: %v", err)
+		return nil, fmt.Errorf("failed to close gzip writer: %w", err)
 	}
 
 	return &Snapshot{
 		name:    normalizeSnapshotName(repoPath),
 		tarball: buf.Bytes(),
-	}
+	}, nil
+}
+
+func supportsSnapshotEntry(info os.FileInfo) bool {
+	mode := info.Mode()
+	return mode.IsDir() || mode.IsRegular() || mode&os.ModeSymlink != 0
 }
 
 // RestoreSnapshot restores a snapshot to a new temporary directory
@@ -101,75 +129,96 @@ func SnapshotRepo(t *testing.T, repoPath string) *Snapshot {
 func RestoreSnapshot(t *testing.T, snapshot *Snapshot) string {
 	t.Helper()
 
-	// Create temp directory for restoration
-	tmpDir := t.TempDir()
-	restorePath, err := safeJoin(tmpDir, snapshot.name)
+	restorePath, err := RestoreSnapshotToDir(snapshot, t.TempDir())
 	if err != nil {
-		t.Fatalf("Invalid snapshot name %q: %v", snapshot.name, err)
+		t.Fatalf("Failed to restore snapshot: %v", err)
+	}
+	return restorePath
+}
+
+// RestoreSnapshotToDir restores a snapshot under baseDir and returns restore path.
+func RestoreSnapshotToDir(snapshot *Snapshot, baseDir string) (string, error) {
+	restorePath, err := safeJoin(baseDir, snapshot.name)
+	if err != nil {
+		return "", fmt.Errorf("invalid snapshot name %q: %w", snapshot.name, err)
 	}
 
 	if err := os.MkdirAll(restorePath, 0755); err != nil {
-		t.Fatalf("Failed to create restore directory: %v", err)
+		return "", fmt.Errorf("failed to create restore directory: %w", err)
 	}
 
-	// Create readers
 	gzipReader, err := gzip.NewReader(bytes.NewReader(snapshot.tarball))
 	if err != nil {
-		t.Fatalf("Failed to create gzip reader: %v", err)
+		return "", fmt.Errorf("failed to create gzip reader: %w", err)
 	}
 	defer gzipReader.Close()
-
 	tarReader := tar.NewReader(gzipReader)
 
-	// Extract files from tarball
 	for {
 		header, err := tarReader.Next()
 		if err == io.EOF {
-			break // End of archive
+			break
 		}
 		if err != nil {
-			t.Fatalf("Failed to read tar header: %v", err)
+			return "", fmt.Errorf("failed to read tar header: %w", err)
 		}
 
-		// Construct full path
 		targetPath, err := safeJoin(restorePath, header.Name)
 		if err != nil {
-			t.Fatalf("Invalid snapshot path %q: %v", header.Name, err)
+			return "", fmt.Errorf("invalid snapshot path %q: %w", header.Name, err)
 		}
 
-		// Handle different file types
 		switch header.Typeflag {
 		case tar.TypeDir:
-			// Create directory
 			if err := os.MkdirAll(targetPath, os.FileMode(header.Mode)); err != nil {
-				t.Fatalf("Failed to create directory %s: %v", targetPath, err)
+				return "", fmt.Errorf("failed to create directory %s: %w", targetPath, err)
 			}
-
-		case tar.TypeReg:
-			// Create parent directory if needed
+		case tar.TypeReg, tar.TypeRegA:
 			dir := filepath.Dir(targetPath)
 			if err := os.MkdirAll(dir, 0755); err != nil {
-				t.Fatalf("Failed to create parent directory for %s: %v", targetPath, err)
+				return "", fmt.Errorf("failed to create parent directory for %s: %w", targetPath, err)
 			}
-
-			// Create and write file
 			file, err := os.OpenFile(targetPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.FileMode(header.Mode))
 			if err != nil {
-				t.Fatalf("Failed to create file %s: %v", targetPath, err)
+				return "", fmt.Errorf("failed to create file %s: %w", targetPath, err)
 			}
-
 			if _, err := io.Copy(file, tarReader); err != nil {
 				file.Close()
-				t.Fatalf("Failed to write file %s: %v", targetPath, err)
+				return "", fmt.Errorf("failed to write file %s: %w", targetPath, err)
 			}
-			file.Close()
-
+			if err := file.Close(); err != nil {
+				return "", fmt.Errorf("failed closing file %s: %w", targetPath, err)
+			}
+		case tar.TypeSymlink:
+			dir := filepath.Dir(targetPath)
+			if err := os.MkdirAll(dir, 0755); err != nil {
+				return "", fmt.Errorf("failed to create parent directory for %s: %w", targetPath, err)
+			}
+			if err := os.Symlink(header.Linkname, targetPath); err != nil {
+				return "", fmt.Errorf("failed to create symlink %s -> %s: %w", targetPath, header.Linkname, err)
+			}
+		case tar.TypeLink:
+			dir := filepath.Dir(targetPath)
+			if err := os.MkdirAll(dir, 0755); err != nil {
+				return "", fmt.Errorf("failed to create parent directory for %s: %w", targetPath, err)
+			}
+			linkTarget, err := safeJoin(restorePath, header.Linkname)
+			if err != nil {
+				return "", fmt.Errorf("invalid hard link target %q: %w", header.Linkname, err)
+			}
+			if err := os.Link(linkTarget, targetPath); err != nil {
+				return "", fmt.Errorf("failed to create hard link %s -> %s: %w", targetPath, linkTarget, err)
+			}
 		default:
-			t.Logf("Skipping unsupported file type %v for %s", header.Typeflag, header.Name)
+			return "", fmt.Errorf(
+				"unsupported snapshot entry type %d for %q",
+				header.Typeflag,
+				header.Name,
+			)
 		}
 	}
 
-	return restorePath
+	return restorePath, nil
 }
 
 func safeJoin(base, name string) (string, error) {
@@ -209,8 +258,7 @@ func (s *Snapshot) Name() string {
 // SaveSnapshotToDisk saves a snapshot to a file (for debugging or caching)
 func SaveSnapshotToDisk(t *testing.T, snapshot *Snapshot, filepath string) {
 	t.Helper()
-
-	if err := os.WriteFile(filepath, snapshot.tarball, 0644); err != nil {
+	if err := SaveSnapshotToDiskE(snapshot, filepath); err != nil {
 		t.Fatalf("Failed to save snapshot to disk: %v", err)
 	}
 }
@@ -218,16 +266,31 @@ func SaveSnapshotToDisk(t *testing.T, snapshot *Snapshot, filepath string) {
 // LoadSnapshotFromDisk loads a snapshot from a file
 func LoadSnapshotFromDisk(t *testing.T, filePath string) *Snapshot {
 	t.Helper()
-
-	data, err := os.ReadFile(filePath)
+	snapshot, err := LoadSnapshotFromDiskE(filePath)
 	if err != nil {
 		t.Fatalf("Failed to load snapshot from disk: %v", err)
 	}
+	return snapshot
+}
 
+// SaveSnapshotToDiskE saves a snapshot to disk and returns errors.
+func SaveSnapshotToDiskE(snapshot *Snapshot, filePath string) error {
+	if err := os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
+		return err
+	}
+	return os.WriteFile(filePath, snapshot.tarball, 0644)
+}
+
+// LoadSnapshotFromDiskE loads a snapshot from disk and returns errors.
+func LoadSnapshotFromDiskE(filePath string) (*Snapshot, error) {
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, err
+	}
 	return &Snapshot{
 		name:    normalizeSnapshotName(filePath),
 		tarball: data,
-	}
+	}, nil
 }
 
 // Example usage in tests:

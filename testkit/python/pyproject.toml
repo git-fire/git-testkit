@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "git-testkit-polyglot-python"
+version = "0.1.0"
+description = "Python wrapper for git-testkit CLI bridge"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["git_testkit*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]

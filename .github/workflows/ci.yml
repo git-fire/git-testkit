@@ -7,6 +7,63 @@ on:
   pull_request:
 
 jobs:
+  spec-kit-conformance:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate spec-kit artifact set
+        run: |
+          test -f testkit/.specify/memory/constitution.md
+          test -f testkit/.specify/specs/001-polyglot-testkit/spec.md
+          test -f testkit/.specify/specs/001-polyglot-testkit/plan.md
+          test -f testkit/.specify/specs/001-polyglot-testkit/tasks.md
+          test -f testkit/.specify/specs/001-polyglot-testkit/contracts/cli-protocol.json
+          test -f testkit/.specify/specs/001-polyglot-testkit/checklists/quality.md
+
+      - name: Validate spec-kit scaffold and status
+        run: ./testkit/.specify/scripts/validate_specify.sh
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "stable"
+      - name: Build git-testkit CLI binary once
+        run: go build ./cmd/git-testkit-cli
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Run Python spec conformance smoke tests
+        run: |
+          cd testkit/python
+          python -m pip install -e ".[dev]"
+          python -m pytest tests/ -v
+      - name: Run Python sample smoke implementations
+        run: |
+          cd testkit/python
+          python -m samples.smoke_repo_flow
+          python -m samples.smoke_snapshot_flow
+
+      - name: Run Java spec conformance smoke tests
+        run: |
+          cd testkit/java
+          mvn test
+      - name: Run Java sample smoke implementations
+        run: |
+          cd testkit/java
+          mvn -Dtest=SampleRepoFlowSmoke,SampleSnapshotFlowSmoke test
+
   test:
     runs-on: ubuntu-latest
     strategy:
@@ -26,5 +83,63 @@ jobs:
       - name: Run vet
         run: go vet ./...
 
+      - name: Check gofmt
+        run: test -z "$(gofmt -l .)"
+
       - name: Run tests
         run: go test ./...
+
+  wrapper-cross-platform:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "stable"
+
+      - name: Build git-testkit CLI binary once
+        shell: bash
+        run: |
+          mkdir -p bin
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            go build -o ./bin/git-testkit-cli.exe ./cmd/git-testkit-cli
+          else
+            go build -o ./bin/git-testkit-cli ./cmd/git-testkit-cli
+          fi
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Run Python wrapper smoke tests
+        shell: bash
+        env:
+          GIT_TESTKIT_CLI: ${{ matrix.os == 'windows-latest' && './bin/git-testkit-cli.exe' || './bin/git-testkit-cli' }}
+        run: |
+          cd testkit/python
+          python -m pip install -e ".[dev]"
+          python -m pytest tests/test_fixtures.py tests/test_snapshots.py -v
+
+      - name: Run Java wrapper smoke tests
+        shell: bash
+        env:
+          GIT_TESTKIT_CLI: ${{ matrix.os == 'windows-latest' && './bin/git-testkit-cli.exe' || './bin/git-testkit-cli' }}
+        run: |
+          cd testkit/java
+          mvn -Dtest=CliBridgeTest,SampleRepoFlowSmoke,SampleSnapshotFlowSmoke test

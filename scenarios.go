@@ -16,10 +16,10 @@ type Scenario struct {
 
 // ScenarioRepo represents a repository in a scenario
 type ScenarioRepo struct {
-	path      string
-	name      string
-	remotes   map[string]string
-	t         *testing.T
+	path    string
+	name    string
+	remotes map[string]string
+	t       *testing.T
 }
 
 // NewScenario creates a new test scenario

@@ -1,0 +1,59 @@
+{
+  "name": "git-testkit-cli protocol",
+  "version": "1.0.0",
+  "transport": "stdin JSON request -> stdout JSON response",
+  "request_schema": {
+    "type": "object",
+    "required": ["op"],
+    "properties": {
+      "op": {"type": "string"},
+      "baseDir": {"type": "string"},
+      "repoPath": {"type": "string"},
+      "snapshotPath": {"type": "string"},
+      "args": {"type": "array", "items": {"type": "string"}},
+      "options": {
+        "type": "object",
+        "properties": {
+          "name": {"type": "string"},
+          "dirty": {"type": "boolean"},
+          "files": {"type": "object"},
+          "remotes": {"type": "object"},
+          "branches": {"type": "array", "items": {"type": "string"}},
+          "initialCommit": {"type": "string"}
+        }
+      }
+    }
+  },
+  "response_schema": {
+    "type": "object",
+    "required": ["ok"],
+    "properties": {
+      "ok": {"type": "boolean"},
+      "error": {"type": "string"},
+      "repoPath": {"type": "string"},
+      "remotePath": {"type": "string"},
+      "fsRoot": {"type": "string"},
+      "output": {"type": "string"},
+      "dirty": {"type": "boolean"},
+      "remotes": {"type": "object"},
+      "sha": {"type": "string"},
+      "branches": {"type": "array", "items": {"type": "string"}},
+      "snapshotName": {"type": "string"},
+      "snapshotSize": {"type": "number"},
+      "restorePath": {"type": "string"}
+    }
+  },
+  "supported_ops": [
+    "create_test_repo",
+    "create_bare_remote",
+    "setup_fake_filesystem",
+    "run_git_cmd",
+    "is_dirty",
+    "get_remotes",
+    "get_current_sha",
+    "get_branches",
+    "snapshot_repo",
+    "snapshot_save",
+    "snapshot_load_restore"
+  ]
+}
