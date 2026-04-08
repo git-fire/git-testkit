@@ -373,6 +373,7 @@ public final class CliBridge {
       return cliInvoker.apply(payload);
     }
     Process process = null;
+    final Process[] processRef = new Process[1];
     ExecutorService streamReaderPool = null;
     Future<String> stdoutFuture = null;
     Future<String> stderrFuture = null;
@@ -380,13 +381,18 @@ public final class CliBridge {
       ProcessBuilder pb = new ProcessBuilder(cliCommandArgs);
       pb.directory(workspaceRoot.toFile());
       process = pb.start();
+      processRef[0] = process;
       streamReaderPool = Executors.newFixedThreadPool(2);
       stdoutFuture =
           streamReaderPool.submit(
-              () -> new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8));
+              () ->
+                  new String(
+                      processRef[0].getInputStream().readAllBytes(), StandardCharsets.UTF_8));
       stderrFuture =
           streamReaderPool.submit(
-              () -> new String(process.getErrorStream().readAllBytes(), StandardCharsets.UTF_8));
+              () ->
+                  new String(
+                      processRef[0].getErrorStream().readAllBytes(), StandardCharsets.UTF_8));
       process.getOutputStream().write(payload.getBytes(StandardCharsets.UTF_8));
       process.getOutputStream().close();
       boolean completed = process.waitFor(120, TimeUnit.SECONDS);
