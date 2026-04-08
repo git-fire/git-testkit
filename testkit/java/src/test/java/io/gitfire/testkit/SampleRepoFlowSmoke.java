@@ -2,14 +2,16 @@ package io.gitfire.testkit;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import org.junit.jupiter.api.io.TempDir;
 
 /** Runnable sample that exercises repo/remote push flow. */
 public class SampleRepoFlowSmoke {
+  @TempDir Path tmp;
+
   @org.junit.jupiter.api.Test
   void sampleRepoFlowRuns() throws Exception {
     Path workspaceRoot = Path.of("../..").toAbsolutePath().normalize();
     CliBridge bridge = new CliBridge(workspaceRoot);
-    Path tmp = Files.createTempDirectory("git-testkit-java-sample-repo");
 
     String remote = bridge.createBareRemote(tmp, "origin");
     String local = bridge.createTestRepo(tmp, "local");
