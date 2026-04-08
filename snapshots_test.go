@@ -135,14 +135,13 @@ func TestRestoreSnapshotRejectsUnsupportedEntryTypes(t *testing.T) {
 		t.Fatalf("failed to write dir header: %v", err)
 	}
 
-	// Add symlink entry that restore does not support.
+	// Add character device entry that restore does not support.
 	if err := tw.WriteHeader(&tar.Header{
-		Name:     "repo/link",
-		Typeflag: tar.TypeSymlink,
-		Linkname: "target",
-		Mode:     0777,
+		Name:     "repo/chardev",
+		Typeflag: tar.TypeChar,
+		Mode:     0600,
 	}); err != nil {
-		t.Fatalf("failed to write symlink header: %v", err)
+		t.Fatalf("failed to write unsupported header: %v", err)
 	}
 
 	if err := tw.Close(); err != nil {
@@ -159,5 +158,45 @@ func TestRestoreSnapshotRejectsUnsupportedEntryTypes(t *testing.T) {
 	}
 	if got := err.Error(); !strings.Contains(got, "unsupported snapshot entry type") {
 		t.Fatalf("expected unsupported entry error, got: %v", err)
+	}
+}
+
+func TestSnapshotRoundtripRestoresSymlinkEntries(t *testing.T) {
+	if _, err := os.Stat("/"); err != nil {
+		t.Skip("symlink test requires filesystem support")
+	}
+
+	root := t.TempDir()
+	repoPath, err := CreateTestRepoInDir(root, RepoOptions{Name: "symlink-repo"})
+	if err != nil {
+		t.Fatalf("failed creating repo: %v", err)
+	}
+
+	targetFile := filepath.Join(repoPath, "target.txt")
+	if err := os.WriteFile(targetFile, []byte("hello"), 0644); err != nil {
+		t.Fatalf("failed writing target file: %v", err)
+	}
+	linkPath := filepath.Join(repoPath, "link.txt")
+	if err := os.Symlink("target.txt", linkPath); err != nil {
+		t.Skipf("symlink not supported on this platform: %v", err)
+	}
+
+	snapshot := SnapshotRepo(t, repoPath)
+	restorePath := RestoreSnapshot(t, snapshot)
+	restoredLink := filepath.Join(restorePath, "link.txt")
+
+	info, err := os.Lstat(restoredLink)
+	if err != nil {
+		t.Fatalf("expected symlink to exist after restore: %v", err)
+	}
+	if info.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("expected %s to be a symlink", restoredLink)
+	}
+	destination, err := os.Readlink(restoredLink)
+	if err != nil {
+		t.Fatalf("failed to read restored symlink: %v", err)
+	}
+	if destination != "target.txt" {
+		t.Fatalf("expected symlink target %q, got %q", "target.txt", destination)
 	}
 }

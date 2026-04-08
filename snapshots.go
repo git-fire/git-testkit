@@ -49,8 +49,17 @@ func SnapshotRepoE(repoPath string) (*Snapshot, error) {
 			return err
 		}
 
+		linkTarget := ""
+		if info.Mode()&os.ModeSymlink != 0 {
+			target, err := os.Readlink(path)
+			if err != nil {
+				return fmt.Errorf("failed to read symlink %s: %w", path, err)
+			}
+			linkTarget = target
+		}
+
 		// Create tar header
-		header, err := tar.FileInfoHeader(info, "")
+		header, err := tar.FileInfoHeader(info, linkTarget)
 		if err != nil {
 			return fmt.Errorf("failed to create tar header: %w", err)
 		}
@@ -153,7 +162,7 @@ func RestoreSnapshotToDir(snapshot *Snapshot, baseDir string) (string, error) {
 			if err := os.MkdirAll(targetPath, os.FileMode(header.Mode)); err != nil {
 				return "", fmt.Errorf("failed to create directory %s: %w", targetPath, err)
 			}
-		case tar.TypeReg:
+		case tar.TypeReg, tar.TypeRegA:
 			dir := filepath.Dir(targetPath)
 			if err := os.MkdirAll(dir, 0755); err != nil {
 				return "", fmt.Errorf("failed to create parent directory for %s: %w", targetPath, err)
@@ -168,6 +177,26 @@ func RestoreSnapshotToDir(snapshot *Snapshot, baseDir string) (string, error) {
 			}
 			if err := file.Close(); err != nil {
 				return "", fmt.Errorf("failed closing file %s: %w", targetPath, err)
+			}
+		case tar.TypeSymlink:
+			dir := filepath.Dir(targetPath)
+			if err := os.MkdirAll(dir, 0755); err != nil {
+				return "", fmt.Errorf("failed to create parent directory for %s: %w", targetPath, err)
+			}
+			if err := os.Symlink(header.Linkname, targetPath); err != nil {
+				return "", fmt.Errorf("failed to create symlink %s -> %s: %w", targetPath, header.Linkname, err)
+			}
+		case tar.TypeLink:
+			dir := filepath.Dir(targetPath)
+			if err := os.MkdirAll(dir, 0755); err != nil {
+				return "", fmt.Errorf("failed to create parent directory for %s: %w", targetPath, err)
+			}
+			linkTarget, err := safeJoin(restorePath, header.Linkname)
+			if err != nil {
+				return "", fmt.Errorf("invalid hard link target %q: %w", header.Linkname, err)
+			}
+			if err := os.Link(linkTarget, targetPath); err != nil {
+				return "", fmt.Errorf("failed to create hard link %s -> %s: %w", targetPath, linkTarget, err)
 			}
 		default:
 			return "", fmt.Errorf(
