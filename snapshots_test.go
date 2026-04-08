@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestRestoreSnapshotRejectsUnsafeSnapshotNames(t *testing.T) {
@@ -198,5 +199,39 @@ func TestSnapshotRoundtripRestoresSymlinkEntries(t *testing.T) {
 	}
 	if destination != "target.txt" {
 		t.Fatalf("expected symlink target %q, got %q", "target.txt", destination)
+	}
+}
+
+type stubFileInfo struct {
+	mode os.FileMode
+}
+
+func (s stubFileInfo) Name() string       { return "stub" }
+func (s stubFileInfo) Size() int64        { return 0 }
+func (s stubFileInfo) Mode() os.FileMode  { return s.mode }
+func (s stubFileInfo) ModTime() time.Time { return time.Time{} }
+func (s stubFileInfo) IsDir() bool        { return s.mode.IsDir() }
+func (s stubFileInfo) Sys() any           { return nil }
+
+func TestSupportsSnapshotEntry(t *testing.T) {
+	tests := []struct {
+		name string
+		mode os.FileMode
+		want bool
+	}{
+		{name: "regular file", mode: 0644, want: true},
+		{name: "directory", mode: os.ModeDir | 0755, want: true},
+		{name: "symlink", mode: os.ModeSymlink, want: true},
+		{name: "named pipe", mode: os.ModeNamedPipe, want: false},
+		{name: "character device", mode: os.ModeCharDevice, want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := supportsSnapshotEntry(stubFileInfo{mode: tt.mode})
+			if got != tt.want {
+				t.Fatalf("supportsSnapshotEntry(%v) = %v, want %v", tt.mode, got, tt.want)
+			}
+		})
 	}
 }

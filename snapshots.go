@@ -49,6 +49,12 @@ func SnapshotRepoE(repoPath string) (*Snapshot, error) {
 			return err
 		}
 
+		// Keep snapshot/restore symmetric: only archive entry types restore supports.
+		// This intentionally skips device files, sockets, and FIFOs.
+		if !supportsSnapshotEntry(info) {
+			return nil
+		}
+
 		linkTarget := ""
 		if info.Mode()&os.ModeSymlink != 0 {
 			target, err := os.Readlink(path)
@@ -111,6 +117,11 @@ func SnapshotRepoE(repoPath string) (*Snapshot, error) {
 		name:    normalizeSnapshotName(repoPath),
 		tarball: buf.Bytes(),
 	}, nil
+}
+
+func supportsSnapshotEntry(info os.FileInfo) bool {
+	mode := info.Mode()
+	return mode.IsDir() || mode.IsRegular() || mode&os.ModeSymlink != 0
 }
 
 // RestoreSnapshot restores a snapshot to a new temporary directory
