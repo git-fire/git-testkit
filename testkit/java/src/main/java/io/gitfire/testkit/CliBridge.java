@@ -22,6 +22,8 @@ public final class CliBridge {
       Pattern.compile("\"repoPath\"\\s*:\\s*\"((?:\\\\.|[^\\\\\"])*)\"");
   private static final Pattern REMOTE_PATH_PATTERN =
       Pattern.compile("\"remotePath\"\\s*:\\s*\"((?:\\\\.|[^\\\\\"])*)\"");
+  private static final Pattern FS_ROOT_PATTERN =
+      Pattern.compile("\"fsRoot\"\\s*:\\s*\"((?:\\\\.|[^\\\\\"])*)\"");
   private static final Pattern OUTPUT_PATTERN =
       Pattern.compile("\"output\"\\s*:\\s*\"((?:\\\\.|[^\\\\\"])*)\"");
   private static final Pattern SHA_PATTERN =
@@ -52,6 +54,96 @@ public final class CliBridge {
   public record SnapshotInfo(String name, int size) {}
 
   public record RestoredSnapshot(String path, String name, int size) {}
+
+  public static final class RepoOptions {
+    private final String name;
+    private boolean dirty;
+    private String initialCommit = "";
+    private final Map<String, String> files = new LinkedHashMap<>();
+    private final Map<String, String> remotes = new LinkedHashMap<>();
+    private final List<String> branches = new ArrayList<>();
+
+    public RepoOptions(String name) {
+      this.name = name;
+    }
+
+    public static RepoOptions builder(String name) {
+      return new RepoOptions(name);
+    }
+
+    public RepoOptions dirty(boolean value) {
+      this.dirty = value;
+      return this;
+    }
+
+    public RepoOptions initialCommit(String value) {
+      this.initialCommit = value == null ? "" : value;
+      return this;
+    }
+
+    public RepoOptions file(String path, String content) {
+      files.put(path, content);
+      return this;
+    }
+
+    public RepoOptions files(Map<String, String> entries) {
+      if (entries != null) {
+        files.putAll(entries);
+      }
+      return this;
+    }
+
+    public RepoOptions remote(String remoteName, String remoteUrl) {
+      remotes.put(remoteName, remoteUrl);
+      return this;
+    }
+
+    public RepoOptions remotes(Map<String, String> entries) {
+      if (entries != null) {
+        remotes.putAll(entries);
+      }
+      return this;
+    }
+
+    public RepoOptions branch(String branchName) {
+      branches.add(branchName);
+      return this;
+    }
+
+    public RepoOptions branches(List<String> entries) {
+      if (entries != null) {
+        branches.addAll(entries);
+      }
+      return this;
+    }
+
+    public RepoOptions build() {
+      return this;
+    }
+
+    private String toJson() {
+      StringBuilder sb = new StringBuilder();
+      sb.append('{');
+      sb.append("\"name\":\"").append(escape(name)).append('"');
+      if (dirty) {
+        sb.append(",\"dirty\":true");
+      }
+      if (!initialCommit.isEmpty()) {
+        sb.append(",\"initialCommit\":\"").append(escape(initialCommit)).append('"');
+      }
+      if (!files.isEmpty()) {
+        sb.append(",\"files\":").append(stringMapToJson(files));
+      }
+      if (!remotes.isEmpty()) {
+        sb.append(",\"remotes\":").append(stringMapToJson(remotes));
+      }
+      if (!branches.isEmpty()) {
+        sb.append(",\"branches\":").append(stringListToJson(branches));
+      }
+      sb.append('}');
+      return sb.toString();
+    }
+  }
 
   private final String cliCommand;
   private final Path workspaceRoot;
@@ -96,12 +188,16 @@ public final class CliBridge {
   }
 
   public String createTestRepo(Path baseDir, String name) {
+    return createTestRepo(baseDir, new RepoOptions(name));
+  }
+
+  public String createTestRepo(Path baseDir, RepoOptions options) {
     String payload =
         "{\"op\":\"create_test_repo\",\"baseDir\":\""
             + escape(baseDir.toString())
-            + "\",\"options\":{\"name\":\""
-            + escape(name)
-            + "\"}}";
+            + "\",\"options\":"
+            + options.toJson()
+            + "}";
     return extractRequired(invoke(payload), REPO_PATH_PATTERN, "repoPath");
   }
 
@@ -113,6 +209,11 @@ public final class CliBridge {
             + escape(name)
             + "\"}}";
     return extractRequired(invoke(payload), REMOTE_PATH_PATTERN, "remotePath");
+  }
+
+  public String setupFakeFilesystem(Path baseDir) {
+    String payload = "{\"op\":\"setup_fake_filesystem\",\"baseDir\":\"" + escape(baseDir.toString()) + "\"}";
+    return extractRequired(invoke(payload), FS_ROOT_PATTERN, "fsRoot");
   }
 
   public String runGitCmd(String repoPath, String... args) {
@@ -434,6 +535,33 @@ public final class CliBridge {
           }
       }
     }
+    return sb.toString();
+  }
+
+  private static String stringMapToJson(Map<String, String> values) {
+    StringBuilder sb = new StringBuilder();
+    sb.append('{');
+    int i = 0;
+    for (Map.Entry<String, String> entry : values.entrySet()) {
+      if (i++ > 0) {
+        sb.append(',');
+      }
+      sb.append('"').append(escape(entry.getKey())).append("\":\"").append(escape(entry.getValue())).append('"');
+    }
+    sb.append('}');
+    return sb.toString();
+  }
+
+  private static String stringListToJson(List<String> values) {
+    StringBuilder sb = new StringBuilder();
+    sb.append('[');
+    for (int i = 0; i < values.size(); i++) {
+      if (i > 0) {
+        sb.append(',');
+      }
+      sb.append('"').append(escape(values.get(i))).append('"');
+    }
+    sb.append(']');
     return sb.toString();
   }
 }

@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.Map;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -28,6 +29,38 @@ class CliBridgeTest {
     assertTrue(Files.exists(Path.of(repo, ".git")));
     assertFalse(bridge.isDirty(repo));
     assertFalse(bridge.getBranches(repo).isEmpty());
+  }
+
+  @Test
+  void createTestRepoWithOptionsAppliesFileAndBranchState() throws Exception {
+    CliBridge bridge = new CliBridge(Path.of("../..").toAbsolutePath().normalize());
+    String remotePath = bridge.createBareRemote(tmp, "remote");
+    CliBridge.RepoOptions options =
+        CliBridge.RepoOptions.builder("subject")
+            .dirty(true)
+            .file("src/main.txt", "hello\n")
+            .remote("origin", remotePath)
+            .branch("feature/a")
+            .initialCommit("seed commit")
+            ;
+
+    String repo = bridge.createTestRepo(tmp, options);
+
+    assertTrue(Files.exists(Path.of(repo, "src/main.txt")));
+    assertTrue(bridge.getBranches(repo).contains("feature/a"));
+    assertEquals(remotePath, bridge.getRemotes(repo).get("origin"));
+    assertTrue(bridge.isDirty(repo));
+  }
+
+  @Test
+  void setupFakeFilesystemCreatesExpectedTree() {
+    CliBridge bridge = new CliBridge(Path.of("../..").toAbsolutePath().normalize());
+    String root = bridge.setupFakeFilesystem(tmp);
+    Path fsRoot = Path.of(root);
+
+    assertTrue(Files.exists(fsRoot.resolve("home/testuser/projects")));
+    assertTrue(Files.exists(fsRoot.resolve("home/testuser/.cache")));
+    assertTrue(Files.exists(fsRoot.resolve("root/sys")));
   }
 
   @Test
