@@ -14,6 +14,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.nio.file.Paths;
 
 public final class CliBridge {
   private static final Pattern ERROR_PATTERN =
@@ -185,7 +186,11 @@ public final class CliBridge {
   private static List<String> defaultCliCommandArgs() {
     String configuredCli = System.getenv("GIT_TESTKIT_CLI");
     if (configuredCli != null && !configuredCli.isBlank()) {
-      return shellCommand(configuredCli);
+      Path cliPath = Paths.get(configuredCli);
+      if (!cliPath.isAbsolute()) {
+        cliPath = detectWorkspaceRoot().resolve(cliPath).normalize();
+      }
+      return shellCommand(cliPath.toString());
     }
     return List.of("go", "run", "./cmd/git-testkit-cli");
   }

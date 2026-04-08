@@ -17,7 +17,10 @@ def _repo_root() -> Path:
 def _cli_cmd() -> list[str]:
     cli = os.environ.get("GIT_TESTKIT_CLI", "").strip()
     if cli:
-        return [cli]
+        cli_path = Path(cli)
+        if not cli_path.is_absolute():
+            cli_path = _repo_root() / cli_path
+        return [str(cli_path)]
     return ["go", "run", "./cmd/git-testkit-cli"]
 
 
