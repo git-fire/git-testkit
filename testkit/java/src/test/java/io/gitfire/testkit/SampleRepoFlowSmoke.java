@@ -7,7 +7,7 @@ import java.nio.file.Path;
 public class SampleRepoFlowSmoke {
   @org.junit.jupiter.api.Test
   void sampleRepoFlowRuns() throws Exception {
-    Path workspaceRoot = Path.of(".").toAbsolutePath().normalize().resolve("..").resolve("..");
+    Path workspaceRoot = Path.of("../..").toAbsolutePath().normalize();
     CliBridge bridge = new CliBridge(workspaceRoot);
     Path tmp = Files.createTempDirectory("git-testkit-java-sample-repo");
 
