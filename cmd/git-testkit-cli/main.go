@@ -43,7 +43,7 @@ type response struct {
 	SHA          string            `json:"sha,omitempty"`
 	Branches     []string          `json:"branches,omitempty"`
 	SnapshotName string            `json:"snapshotName,omitempty"`
-	SnapshotSize int               `json:"snapshotSize"`
+	SnapshotSize *int              `json:"snapshotSize,omitempty"`
 	RestorePath  string            `json:"restorePath,omitempty"`
 }
 
@@ -179,7 +179,11 @@ func handle(req request) (response, error) {
 		if err != nil {
 			return response{}, err
 		}
-		return response{OK: true, SnapshotName: snapshot.Name(), SnapshotSize: snapshot.Size()}, nil
+		return response{
+			OK:           true,
+			SnapshotName: snapshot.Name(),
+			SnapshotSize: intPtr(snapshot.Size()),
+		}, nil
 
 	case "snapshot_save":
 		if req.RepoPath == "" || req.SnapshotPath == "" {
@@ -192,7 +196,11 @@ func handle(req request) (response, error) {
 		if err := testutil.SaveSnapshotToDiskE(snapshot, req.SnapshotPath); err != nil {
 			return response{}, err
 		}
-		return response{OK: true, SnapshotName: snapshot.Name(), SnapshotSize: snapshot.Size()}, nil
+		return response{
+			OK:           true,
+			SnapshotName: snapshot.Name(),
+			SnapshotSize: intPtr(snapshot.Size()),
+		}, nil
 
 	case "snapshot_load_restore":
 		if req.SnapshotPath == "" {
@@ -214,7 +222,7 @@ func handle(req request) (response, error) {
 			OK:           true,
 			RestorePath:  restorePath,
 			SnapshotName: snapshot.Name(),
-			SnapshotSize: snapshot.Size(),
+			SnapshotSize: intPtr(snapshot.Size()),
 		}, nil
 
 	default:
@@ -237,6 +245,18 @@ func writeResponse(res response) {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetEscapeHTML(false)
 	if err := enc.Encode(res); err != nil {
-		fmt.Fprintf(os.Stderr, `{"ok":false,"error":"failed writing response: %s"}`+"\n", err.Error())
+		fallback := response{
+			OK:    false,
+			Error: fmt.Sprintf("failed writing response: %s", err.Error()),
+		}
+		stderrEnc := json.NewEncoder(os.Stderr)
+		stderrEnc.SetEscapeHTML(false)
+		if encodeErr := stderrEnc.Encode(fallback); encodeErr != nil {
+			fmt.Fprintf(os.Stderr, "failed writing fallback response: %v\n", encodeErr)
+		}
 	}
+}
+
+func intPtr(v int) *int {
+	return &v
 }
