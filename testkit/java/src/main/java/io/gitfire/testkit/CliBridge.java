@@ -37,12 +37,12 @@ public final class CliBridge {
   private static final Pattern RESTORE_PATH_PATTERN =
       Pattern.compile("\"restorePath\"\\s*:\\s*\"((?:\\\\.|[^\\\\\"])*)\"");
 
-  private static final class CliResult {
+  static final class CliResult {
     private final String stdout;
     private final String stderr;
     private final int code;
 
-    private CliResult(String stdout, String stderr, int code) {
+    CliResult(String stdout, String stderr, int code) {
       this.stdout = stdout;
       this.stderr = stderr;
       this.code = code;
@@ -55,6 +55,7 @@ public final class CliBridge {
 
   private final String cliCommand;
   private final Path workspaceRoot;
+  private final java.util.function.Function<String, CliResult> cliInvoker;
 
   public CliBridge(Path workspaceRoot) {
     this(workspaceRoot, "go run ./cmd/git-testkit-cli");
@@ -65,8 +66,20 @@ public final class CliBridge {
   }
 
   public CliBridge(Path workspaceRoot, String cliCommand) {
+    this(workspaceRoot, cliCommand, null);
+  }
+
+  CliBridge(Path workspaceRoot, java.util.function.Function<String, CliResult> cliInvoker) {
+    this(workspaceRoot, "", cliInvoker);
+  }
+
+  CliBridge(
+      Path workspaceRoot,
+      String cliCommand,
+      java.util.function.Function<String, CliResult> cliInvoker) {
     this.workspaceRoot = workspaceRoot;
     this.cliCommand = cliCommand;
+    this.cliInvoker = cliInvoker;
   }
 
   private static Path detectWorkspaceRoot() {
@@ -229,6 +242,9 @@ public final class CliBridge {
   }
 
   private CliResult runCli(String payload) {
+    if (cliInvoker != null) {
+      return cliInvoker.apply(payload);
+    }
     ExecutorService streamReaderPool = null;
     try {
       ProcessBuilder pb = new ProcessBuilder("bash", "-lc", cliCommand);
