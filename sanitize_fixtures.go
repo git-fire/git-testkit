@@ -263,6 +263,9 @@ func validateBlockedRefPathToken(token string) error {
 	if !blockedRefPathTokenPattern.MatchString(token) {
 		return fmt.Errorf("must contain only letters, numbers, dot, underscore, or dash")
 	}
+	if strings.HasPrefix(token, "-") {
+		return fmt.Errorf("cannot start with hyphen")
+	}
 	if strings.HasPrefix(token, ".") || strings.HasSuffix(token, ".") {
 		return fmt.Errorf("cannot start or end with dot")
 	}
@@ -302,14 +305,14 @@ func collectBlockedFileContentMatches(repoPath string, commits []string, blocked
 			return nil, err
 		}
 		for _, line := range lines {
-			matchSet[commit+":"+line] = struct{}{}
+			matchSet[line] = struct{}{}
 		}
 	}
 	return sortedKeys(matchSet), nil
 }
 
 func runGitGrepForCommit(repoPath, commit, blocked string) ([]string, error) {
-	cmd := exec.Command("git", "grep", "-n", "-I", "-F", blocked, commit, "--")
+	cmd := exec.Command("git", "grep", "-n", "-I", "-F", "-e", blocked, commit, "--")
 	cmd.Dir = repoPath
 
 	var stderr bytes.Buffer
@@ -322,7 +325,7 @@ func runGitGrepForCommit(repoPath, commit, blocked string) ([]string, error) {
 		}
 		return nil, fmt.Errorf(
 			"git command failed: git %v\nStdout: %s\nStderr: %s\nError: %w",
-			[]string{"grep", "-n", "-I", "-F", blocked, commit, "--"},
+			[]string{"grep", "-n", "-I", "-F", "-e", blocked, commit, "--"},
 			strings.TrimSpace(string(output)),
 			strings.TrimSpace(stderr.String()),
 			err,
