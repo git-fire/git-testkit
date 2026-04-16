@@ -81,6 +81,16 @@ func TestCreateRewriteValidationFixtureInDir_RejectsInvalidBlockedString(t *test
 	}
 }
 
+func TestCreateRewriteValidationFixtureInDir_RejectsLeadingHyphen(t *testing.T) {
+	_, err := testutil.CreateRewriteValidationFixtureInDir(t.TempDir(), testutil.RewriteValidationFixtureOptions{
+		Name:          "hyphen-blocked",
+		BlockedString: "-blockedtoken",
+	})
+	if err == nil {
+		t.Fatal("expected leading-hyphen blocked string to be rejected")
+	}
+}
+
 func TestValidateBlockedStringCoverageDetectedE_FailsWhenCoverageMissing(t *testing.T) {
 	repoPath := testutil.CreateTestRepo(t, testutil.RepoOptions{Name: "missing-coverage"})
 
