@@ -31,9 +31,11 @@ go test ./...
 ## Project structure
 
 - `fixtures.go`: base repo creation and command helpers.
+- `sanitize_fixtures.go`: reusable sanitize/rewrite fixtures plus blocked-string scan/assert helpers.
 - `scenarios.go`: fluent scenario builder and predefined multi-repo scenarios.
 - `snapshots.go`: snapshot/restore utilities for expensive test setup reuse.
 - `fixtures_test.go`: external package tests (`testutil_test`) that validate public API usage.
+- `sanitize_fixtures_test.go`: coverage tests for blocked-string detection/removal across content/history/refs/paths.
 - `usb_fixtures.go` / `usb_fixtures_test.go`: USB volume root and `.git-fire` config helpers for backup-mode style tests.
 - `scenarios_test.go`: package-internal tests for scenario/snapshot behavior.
 
@@ -74,6 +76,18 @@ Common usage split:
 - `CreateTestRepo`: fast setup for single-repo state.
 - `NewScenario`: multi-repo topologies and fluent setup.
 - `SnapshotRepo`/`RestoreSnapshot`: performance optimization for repeated expensive setups.
+- `CreateRewriteValidationFixture` + blocked-string assertions: sanitize/rewrite validation against file contents, commit messages, refs, and paths.
+
+Sanitize/rewrite focused validation loop:
+
+```bash
+# Run only sanitize/rewrite fixture and assertion tests.
+go test ./... -run 'RewriteValidation|BlockedStringCoverage'
+
+# Full required local gate.
+go vet ./...
+go test ./...
+```
 
 ## Adding new helpers
 

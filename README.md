@@ -30,6 +30,7 @@ go get github.com/git-fire/git-testkit
 - Repository fixtures (`CreateTestRepo`, `CreateBareRemote`, `RunGitCmd`)
 - Scenario builders for common multi-repo states (`NewScenario`, conflict/worktree helpers)
 - Snapshot helpers for capturing and restoring repository state in tests
+- Sanitize/rewrite validation helpers for blocked-string coverage across content/history/refs/paths
 
 ## API overview
 
@@ -38,6 +39,8 @@ go get github.com/git-fire/git-testkit
 - `NewScenario(t)` returns a fluent builder for multi-repo test topologies.
 - `SnapshotRepo(t, path)` and `RestoreSnapshot(t, snap)` speed up repeated fixture setup.
 - `IsDirty`, `GetCurrentSHA`, `GetBranches`, `GetRemotes` provide common assertions/helpers.
+- `CreateRewriteValidationFixture(t, opts)` seeds blocked strings across file contents, commit messages, refs, and paths.
+- `AssertBlockedStringCoverageDetected` and `AssertBlockedStringCoverageRemoved` validate sanitize/rewrite coverage before/after rewriting.
 
 ## Quickstart for using in tests
 
@@ -111,6 +114,33 @@ func TestUsingSnapshot(t *testing.T) {
 	// Use clonePath in assertions without rebuilding the fixture each time.
 	testutil.RunGitCmd(t, clonePath, "status")
 }
+```
+
+### Validate sanitize/rewrite coverage
+
+```go
+func TestRewriteRemovesBlockedString(t *testing.T) {
+	fixture := testutil.CreateRewriteValidationFixture(t, testutil.RewriteValidationFixtureOptions{
+		Name:          "rewrite-fixture",
+		BlockedString: "blockedtoken",
+	})
+
+	// Confirm fixture coverage before running your rewrite logic.
+	testutil.AssertBlockedStringCoverageDetected(t, fixture.RepoPath, fixture.BlockedString)
+
+	// Run your sanitizer/rewrite command against fixture.RepoPath here.
+	// Example:
+	// testutil.RunGitCmd(t, fixture.RepoPath, "filter-branch", ...)
+
+	// Validate the blocked string is removed from all tracked surfaces.
+	testutil.AssertBlockedStringCoverageRemoved(t, fixture.RepoPath, fixture.BlockedString)
+}
+```
+
+Run just sanitize/rewrite-focused tests:
+
+```bash
+go test ./... -run 'RewriteValidation|BlockedStringCoverage'
 ```
 
 ## Notes

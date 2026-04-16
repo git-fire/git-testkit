@@ -11,6 +11,8 @@
 //     remote, diverged clones, worktrees, conflict states).
 //   - [SnapshotRepo] / [RestoreSnapshot] for capturing expensive fixture state
 //     once and restoring it cheaply across subtests.
+//   - [CreateRewriteValidationFixture] plus blocked-string assertions for
+//     sanitize/rewrite validation across content, commit history, refs, and paths.
 //
 // All helpers integrate with Go's testing.T: repositories are created inside
 // t.TempDir() and cleaned up automatically, and setup failures call t.Fatalf
