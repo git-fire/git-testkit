@@ -254,9 +254,6 @@ public final class CliBridge {
     }
     payload.append("]}");
     String json = invoke(payload.toString());
-    if (!OUTPUT_PATTERN.matcher(json).find()) {
-      throw new IllegalStateException("missing output in bridge response: " + json);
-    }
     return extractRequired(json, OUTPUT_PATTERN, "output");
   }
 
